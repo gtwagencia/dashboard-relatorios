@@ -1,0 +1,650 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import useSWR from 'swr';
+import { metaApi, webhooksApi } from '@/lib/api';
+import { formatDateTime } from '@/lib/formatters';
+import TopBar from '@/components/layout/TopBar';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import { MetaAccount, WebhookConfig } from '@/types';
+import toast from 'react-hot-toast';
+import clsx from 'clsx';
+
+type SettingsTab = 'meta' | 'webhooks' | 'reports';
+
+// ============================================================
+// Meta Accounts Tab
+// ============================================================
+
+function MetaAccountsTab() {
+  const [adAccountId, setAdAccountId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const { data: accounts, isLoading, mutate } = useSWR<MetaAccount[]>(
+    'meta-accounts',
+    () => metaApi.list().then((r) => r.data)
+  );
+
+  async function handleAdd() {
+    if (!adAccountId.trim() || !accessToken.trim() || !businessName.trim()) {
+      toast.error('Preencha todos os campos.');
+      return;
+    }
+    setAdding(true);
+    try {
+      await metaApi.add({
+        adAccountId: adAccountId.trim(),
+        accessToken: accessToken.trim(),
+        businessName: businessName.trim(),
+      });
+      await mutate();
+      setAdAccountId('');
+      setAccessToken('');
+      setBusinessName('');
+      setShowForm(false);
+      toast.success('Conta Meta adicionada com sucesso!');
+    } catch {
+      toast.error('Erro ao adicionar conta. Verifique as credenciais.');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleSync(id: string) {
+    setSyncingId(id);
+    try {
+      await metaApi.sync(id);
+      await mutate();
+      toast.success('Sincronização iniciada!');
+    } catch {
+      toast.error('Erro ao sincronizar conta.');
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Tem certeza que deseja remover esta conta?')) return;
+    setDeletingId(id);
+    try {
+      await metaApi.delete(id);
+      await mutate();
+      toast.success('Conta removida.');
+    } catch {
+      toast.error('Erro ao remover conta.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Contas Meta Ads Conectadas"
+        subtitle="Gerencie as contas de anúncio vinculadas ao dashboard"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowForm((v) => !v)}
+            icon={
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            }
+          >
+            Adicionar Conta
+          </Button>
+        }
+      >
+        {/* Add Form */}
+        {showForm && (
+          <div className="mb-5 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
+            <h4 className="text-sm font-semibold text-blue-800">Nova Conta Meta Ads</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  ID da Conta de Anúncio
+                </label>
+                <input
+                  type="text"
+                  placeholder="act_123456789"
+                  value={adAccountId}
+                  onChange={(e) => setAdAccountId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Nome do Negócio
+                </label>
+                <input
+                  type="text"
+                  placeholder="Minha Empresa Ltda"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Access Token
+                </label>
+                <input
+                  type="password"
+                  placeholder="EAABsbCS..."
+                  value={accessToken}
+                  onChange={(e) => setAccessToken(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="primary" size="sm" loading={adding} onClick={handleAdd}>
+                Adicionar
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} disabled={adding}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Accounts List */}
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="h-16 bg-gray-50 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : !accounts || accounts.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl">
+            Nenhuma conta Meta Ads conectada. Adicione sua primeira conta acima.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {accounts.map((account) => (
+              <div
+                key={account.id}
+                className="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:border-blue-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{account.businessName}</p>
+                    <p className="text-xs text-gray-500">{account.adAccountId} • {account.currency}</p>
+                    {account.syncedAt && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Última sync: {formatDateTime(account.syncedAt)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={syncingId === account.id}
+                    onClick={() => handleSync(account.id)}
+                    icon={
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    }
+                  >
+                    Sincronizar
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={deletingId === account.id}
+                    onClick={() => handleDelete(account.id)}
+                    icon={
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    }
+                  >
+                    Remover
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Webhooks Tab
+// ============================================================
+
+const EVENT_TYPES = [
+  { value: 'daily', label: 'Relatório Diário' },
+  { value: 'weekly', label: 'Relatório Semanal' },
+  { value: 'monthly', label: 'Relatório Mensal' },
+  { value: 'sync_complete', label: 'Sincronização Concluída' },
+  { value: 'campaign_alert', label: 'Alerta de Campanha' },
+];
+
+function getEventTypeLabel(eventType: string): string {
+  return EVENT_TYPES.find((e) => e.value === eventType)?.label || eventType;
+}
+
+function WebhooksTab() {
+  const [url, setUrl] = useState('');
+  const [eventType, setEventType] = useState('daily');
+  const [secret, setSecret] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const { data: webhooks, isLoading, mutate } = useSWR<WebhookConfig[]>(
+    'webhooks',
+    () => webhooksApi.list().then((r) => r.data)
+  );
+
+  async function handleAdd() {
+    if (!url.trim()) {
+      toast.error('Informe a URL do webhook.');
+      return;
+    }
+    if (!url.startsWith('http')) {
+      toast.error('A URL deve começar com http:// ou https://');
+      return;
+    }
+    setAdding(true);
+    try {
+      await webhooksApi.create({
+        eventType,
+        url: url.trim(),
+        ...(secret.trim() ? { secret: secret.trim() } : {}),
+      });
+      await mutate();
+      setUrl('');
+      setSecret('');
+      setEventType('daily');
+      setShowForm(false);
+      toast.success('Webhook criado com sucesso!');
+    } catch {
+      toast.error('Erro ao criar webhook.');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleTest(id: string) {
+    setTestingId(id);
+    try {
+      await webhooksApi.test(id);
+      toast.success('Webhook testado! Verifique o endpoint n8n.');
+    } catch {
+      toast.error('Falha no teste do webhook.');
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function handleToggle(webhook: WebhookConfig) {
+    setTogglingId(webhook.id);
+    try {
+      await webhooksApi.toggleActive(webhook.id, !webhook.isActive);
+      await mutate();
+      toast.success(`Webhook ${!webhook.isActive ? 'ativado' : 'desativado'}.`);
+    } catch {
+      toast.error('Erro ao atualizar webhook.');
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Tem certeza que deseja excluir este webhook?')) return;
+    setDeletingId(id);
+    try {
+      await webhooksApi.delete(id);
+      await mutate();
+      toast.success('Webhook excluído.');
+    } catch {
+      toast.error('Erro ao excluir webhook.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Webhooks (n8n)"
+        subtitle="Configure endpoints para receber notificações automáticas"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowForm((v) => !v)}
+            icon={
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            }
+          >
+            Adicionar Webhook
+          </Button>
+        }
+      >
+        {/* Add Form */}
+        {showForm && (
+          <div className="mb-5 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
+            <h4 className="text-sm font-semibold text-blue-800">Novo Webhook</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Tipo de Evento
+                </label>
+                <select
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  {EVENT_TYPES.map((e) => (
+                    <option key={e.value} value={e.value}>
+                      {e.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  URL do Webhook (n8n)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://n8n.seudominio.com/webhook/..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Secret (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="chave-secreta-opcional"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="primary" size="sm" loading={adding} onClick={handleAdd}>
+                Criar Webhook
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} disabled={adding}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Webhooks List */}
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-16 bg-gray-50 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : !webhooks || webhooks.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm border-2 border-dashed border-gray-100 rounded-xl">
+            Nenhum webhook configurado. Adicione seu primeiro webhook acima.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {webhooks.map((webhook) => (
+              <div
+                key={webhook.id}
+                className={clsx(
+                  'flex items-center justify-between p-4 border rounded-xl transition-all',
+                  webhook.isActive
+                    ? 'border-gray-100 hover:border-green-100'
+                    : 'border-gray-100 opacity-60'
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={clsx(
+                      'w-2 h-2 rounded-full shrink-0',
+                      webhook.isActive ? 'bg-green-500' : 'bg-gray-300'
+                    )}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="info">{getEventTypeLabel(webhook.eventType)}</Badge>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 truncate max-w-[320px]">
+                      {webhook.url}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                  {/* Toggle */}
+                  <button
+                    onClick={() => handleToggle(webhook)}
+                    disabled={togglingId === webhook.id}
+                    className={clsx(
+                      'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
+                      webhook.isActive ? 'bg-green-500' : 'bg-gray-300'
+                    )}
+                    title={webhook.isActive ? 'Desativar' : 'Ativar'}
+                  >
+                    <span
+                      className={clsx(
+                        'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                        webhook.isActive ? 'translate-x-4' : 'translate-x-0.5'
+                      )}
+                    />
+                  </button>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={testingId === webhook.id}
+                    onClick={() => handleTest(webhook.id)}
+                    disabled={!webhook.isActive}
+                  >
+                    Testar
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={deletingId === webhook.id}
+                    onClick={() => handleDelete(webhook.id)}
+                    icon={
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Auto Reports Tab
+// ============================================================
+
+function AutoReportsTab() {
+  const schedules = [
+    {
+      icon: '📅',
+      title: 'Relatório Diário',
+      schedule: 'Todos os dias às 07:00',
+      description:
+        'Resumo com investimento total, leads gerados, CTR médio e CPC médio do dia anterior.',
+      badge: 'Ativo',
+    },
+    {
+      icon: '📊',
+      title: 'Relatório Semanal',
+      schedule: 'Toda segunda-feira às 08:00',
+      description:
+        'Análise da semana com comparativo versus semana anterior, breakdown por objetivo e melhores campanhas.',
+      badge: 'Ativo',
+    },
+    {
+      icon: '📈',
+      title: 'Relatório Mensal',
+      schedule: 'Todo dia 1º do mês às 09:00',
+      description:
+        'Relatório completo mensal com evolução histórica, análise de tendências e insights de IA.',
+      badge: 'Ativo',
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Relatórios Automáticos"
+        subtitle="Os relatórios são enviados automaticamente via webhook n8n conforme a agenda abaixo"
+      >
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2.5 text-sm text-blue-700">
+          <svg className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            Para receber os relatórios, configure ao menos um webhook ativo na aba <strong>Webhooks (n8n)</strong>.
+            Os relatórios são enviados como payload JSON para o endpoint configurado.
+          </span>
+        </div>
+
+        <div className="space-y-4">
+          {schedules.map((item, i) => (
+            <div key={i} className="flex items-start gap-4 p-5 border border-gray-100 rounded-xl hover:border-blue-100 transition-colors">
+              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-xl shrink-0">
+                {item.icon}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h4 className="text-sm font-semibold text-gray-800">{item.title}</h4>
+                  <Badge variant="success">{item.badge}</Badge>
+                </div>
+                <p className="text-xs text-blue-600 font-medium mb-1.5">
+                  ⏰ {item.schedule}
+                </p>
+                <p className="text-sm text-gray-500">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 p-4 bg-gray-50 rounded-xl">
+          <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+            Formato do Payload JSON
+          </h4>
+          <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-3 overflow-x-auto">
+{`{
+  "type": "daily" | "weekly" | "monthly",
+  "period": { "start": "2024-01-01", "end": "2024-01-07" },
+  "summary": { "totalSpend": 1234.56, "totalLeads": 89, ... },
+  "objectives": [ { "name": "Leads", "spend": 800, ... } ],
+  "generatedAt": "2024-01-08T07:00:00Z"
+}`}
+          </pre>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Main Settings Page
+// ============================================================
+
+export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('meta');
+
+  const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
+    {
+      key: 'meta',
+      label: 'Contas Meta',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'webhooks',
+      label: 'Webhooks (n8n)',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+      ),
+    },
+    {
+      key: 'reports',
+      label: 'Relatórios Automáticos',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col min-h-full">
+      <TopBar title="Configurações" showDateRange={false} />
+
+      <div className="flex-1 p-6 space-y-5">
+        {/* Tab Bar */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 self-start w-fit">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                activeTab === tab.key
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              {tab.icon}
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'meta' && <MetaAccountsTab />}
+        {activeTab === 'webhooks' && <WebhooksTab />}
+        {activeTab === 'reports' && <AutoReportsTab />}
+      </div>
+    </div>
+  );
+}

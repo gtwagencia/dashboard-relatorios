@@ -1,0 +1,143 @@
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import {
+  AuthResponse,
+  Campaign,
+  CampaignMetrics,
+  MetricsSummary,
+  ObjectiveMetrics,
+  TimeseriesPoint,
+  Report,
+  AiInsight,
+  WebhookConfig,
+  MetaAccount,
+  PaginatedResponse,
+} from '@/types';
+
+const api: AxiosInstance = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor: attach Bearer token
+api.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('access_token');
+      if (token && config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor: handle 401
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Auth API
+export const authApi = {
+  login: (email: string, password: string) =>
+    api.post<AuthResponse>('/auth/login', { email, password }),
+
+  logout: (refreshToken: string) =>
+    api.post('/auth/logout', { refreshToken }),
+};
+
+// Metrics API
+export const metricsApi = {
+  getSummary: (from: string, to: string) =>
+    api.get<MetricsSummary>('/metrics/summary', { params: { from, to } }),
+
+  getByObjective: (from: string, to: string) =>
+    api.get<ObjectiveMetrics[]>('/metrics/by-objective', { params: { from, to } }),
+
+  getTimeseries: (from: string, to: string, campaignId?: string) =>
+    api.get<TimeseriesPoint[]>('/metrics/timeseries', {
+      params: { from, to, ...(campaignId ? { campaignId } : {}) },
+    }),
+};
+
+// Campaigns API
+export const campaignsApi = {
+  list: (params?: {
+    objective?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get<PaginatedResponse<Campaign>>('/campaigns', { params }),
+
+  get: (id: string) => api.get<Campaign>(`/campaigns/${id}`),
+
+  getMetrics: (id: string, from: string, to: string) =>
+    api.get<CampaignMetrics[]>(`/campaigns/${id}/metrics`, { params: { from, to } }),
+};
+
+// Reports API
+export const reportsApi = {
+  list: (page?: number) =>
+    api.get<PaginatedResponse<Report>>('/reports', { params: { page, limit: 10 } }),
+
+  trigger: (data: {
+    type: string;
+    objective?: string;
+    periodStart?: string;
+    periodEnd?: string;
+  }) => api.post<Report>('/reports/trigger', data),
+};
+
+// AI API
+export const aiApi = {
+  getInsights: (campaignId?: string, limit?: number) =>
+    api.get<AiInsight[]>('/ai/insights', {
+      params: {
+        ...(campaignId ? { campaignId } : {}),
+        ...(limit ? { limit } : {}),
+      },
+    }),
+
+  generate: (campaignId: string | null, scope: 'campaign' | 'account') =>
+    api.post<AiInsight>('/ai/generate', { campaignId, scope }),
+};
+
+// Webhooks API
+export const webhooksApi = {
+  list: () => api.get<WebhookConfig[]>('/webhooks'),
+
+  create: (data: { eventType: string; url: string; secret?: string }) =>
+    api.post<WebhookConfig>('/webhooks', data),
+
+  test: (id: string) => api.post(`/webhooks/${id}/test`),
+
+  delete: (id: string) => api.delete(`/webhooks/${id}`),
+
+  toggleActive: (id: string, isActive: boolean) =>
+    api.patch<WebhookConfig>(`/webhooks/${id}`, { isActive }),
+};
+
+// Meta Accounts API
+export const metaApi = {
+  list: () => api.get<MetaAccount[]>('/meta-accounts'),
+
+  add: (data: { adAccountId: string; accessToken: string; businessName: string }) =>
+    api.post<MetaAccount>('/meta-accounts', data),
+
+  sync: (id: string) => api.post(`/meta-accounts/${id}/sync`),
+
+  delete: (id: string) => api.delete(`/meta-accounts/${id}`),
+};
+
+export default api;
