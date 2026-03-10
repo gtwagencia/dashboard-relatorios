@@ -22,15 +22,14 @@ CREATE INDEX IF NOT EXISTS idx_clients_is_active ON clients (is_active);
 -- meta_accounts
 -- ──────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS meta_accounts (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id         UUID NOT NULL REFERENCES clients (id) ON DELETE CASCADE,
-  ad_account_id     VARCHAR(100) NOT NULL,
-  access_token_enc  TEXT NOT NULL,
-  token_expires_at  TIMESTAMPTZ,
-  business_name     VARCHAR(255),
-  currency          VARCHAR(10) NOT NULL DEFAULT 'BRL',
-  timezone          VARCHAR(100) NOT NULL DEFAULT 'America/Sao_Paulo',
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id     UUID NOT NULL REFERENCES clients (id) ON DELETE CASCADE,
+  ad_account_id VARCHAR(100) NOT NULL,
+  business_name VARCHAR(255),
+  currency      VARCHAR(10)  NOT NULL DEFAULT 'BRL',
+  timezone      VARCHAR(100) NOT NULL DEFAULT 'America/Sao_Paulo',
+  synced_at     TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_meta_accounts_client_id     ON meta_accounts (client_id);

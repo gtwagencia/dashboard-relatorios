@@ -3,10 +3,9 @@
 const { Router } = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../../config/database');
-const { encrypt } = require('../../utils/crypto');
 const { getAdAccounts } = require('./meta.service');
 const { syncAccount } = require('./meta.sync');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireAdmin } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 
 const router = Router();
@@ -16,14 +15,14 @@ router.use(authenticate);
 
 /**
  * GET /api/meta-accounts
- * List Meta accounts for the current client.
+ * List Meta accounts for the current client (or all, if admin).
  */
 router.get('/', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const { clientId, role } = req.user;
 
     const { rows } = await query(
-      `SELECT id, ad_account_id, business_name, currency, timezone, token_expires_at, created_at
+      `SELECT id, client_id, ad_account_id, business_name, currency, timezone, synced_at, created_at
        FROM meta_accounts
        WHERE client_id = $1
        ORDER BY created_at DESC`,
@@ -38,34 +37,47 @@ router.get('/', async (req, res, next) => {
 
 /**
  * POST /api/meta-accounts
- * Add a new Meta ad account.
- * Body: { adAccountId, accessToken, businessName, currency?, timezone? }
+ * Add a Meta ad account for a client. ADMIN ONLY.
+ * Body: { adAccountId, businessName, clientId, currency?, timezone? }
+ *
+ * The access token is configured globally via META_ACCESS_TOKEN env variable.
  */
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
-    const { adAccountId, accessToken, businessName, currency = 'BRL', timezone = 'America/Sao_Paulo' } = req.body;
+    const {
+      adAccountId,
+      businessName,
+      clientId,
+      currency = 'BRL',
+      timezone = 'America/Sao_Paulo',
+    } = req.body;
 
-    if (!adAccountId || !accessToken) {
-      return res.status(400).json({ error: 'adAccountId and accessToken are required', code: 400 });
+    if (!adAccountId || !clientId) {
+      return res.status(400).json({ error: 'adAccountId e clientId são obrigatórios', code: 400 });
     }
 
-    // Encrypt token before persisting
-    const accessTokenEnc = encrypt(accessToken);
-    const id = uuidv4();
+    // Verify target client exists
+    const { rows: clientRows } = await query(
+      `SELECT id FROM clients WHERE id = $1 AND is_active = true`,
+      [clientId]
+    );
+    if (clientRows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado', code: 404 });
+    }
 
+    const id = uuidv4();
     const { rows } = await query(
       `INSERT INTO meta_accounts
-         (id, client_id, ad_account_id, access_token_enc, business_name, currency, timezone)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, ad_account_id, business_name, currency, timezone, created_at`,
-      [id, clientId, adAccountId, accessTokenEnc, businessName || '', currency, timezone]
+         (id, client_id, ad_account_id, business_name, currency, timezone)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, client_id, ad_account_id, business_name, currency, timezone, created_at`,
+      [id, clientId, adAccountId, businessName || '', currency, timezone]
     );
 
     const account = rows[0];
     logger.info('Meta account added', { clientId, metaAccountId: id, adAccountId });
 
-    // Trigger async sync (do not wait for it)
+    // Trigger async sync (do not await)
     syncAccount(id).catch((err) =>
       logger.error('Initial sync failed', { metaAccountId: id, error: err.message })
     );
@@ -78,22 +90,20 @@ router.post('/', async (req, res, next) => {
 
 /**
  * DELETE /api/meta-accounts/:id
- * Remove a Meta account (and cascades to campaigns/metrics).
+ * Remove a Meta account. ADMIN ONLY.
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
-
     const { rowCount } = await query(
-      `DELETE FROM meta_accounts WHERE id = $1 AND client_id = $2`,
-      [req.params.id, clientId]
+      `DELETE FROM meta_accounts WHERE id = $1`,
+      [req.params.id]
     );
 
     if (rowCount === 0) {
-      return res.status(404).json({ error: 'Meta account not found', code: 404 });
+      return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
     }
 
-    return res.status(200).json({ message: 'Meta account removed' });
+    return res.status(200).json({ message: 'Conta Meta removida' });
   } catch (err) {
     next(err);
   }
@@ -101,51 +111,49 @@ router.delete('/:id', async (req, res, next) => {
 
 /**
  * POST /api/meta-accounts/:id/sync
- * Trigger a manual sync for one account.
+ * Trigger a manual sync. Admin or the owning client.
  */
 router.post('/:id/sync', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const { clientId, role } = req.user;
 
-    // Verify ownership
+    const whereClause = role === 'admin'
+      ? `WHERE id = $1`
+      : `WHERE id = $1 AND client_id = $2`;
+    const params = role === 'admin' ? [req.params.id] : [req.params.id, clientId];
+
     const { rows } = await query(
-      `SELECT id FROM meta_accounts WHERE id = $1 AND client_id = $2`,
-      [req.params.id, clientId]
+      `SELECT id FROM meta_accounts ${whereClause}`,
+      params
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ error: 'Meta account not found', code: 404 });
+      return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
     }
 
-    // Kick off sync in background
     syncAccount(req.params.id).catch((err) =>
       logger.error('Manual sync failed', { metaAccountId: req.params.id, error: err.message })
     );
 
-    return res.status(202).json({ message: 'Sync started', metaAccountId: req.params.id });
+    return res.status(202).json({ message: 'Sincronização iniciada', metaAccountId: req.params.id });
   } catch (err) {
     next(err);
   }
 });
 
 /**
- * GET /api/meta-accounts/ad-accounts
- * Validate a token and return available ad accounts from Meta.
- * Query: ?accessToken=...
+ * GET /api/meta-accounts/available
+ * Returns the ad accounts accessible by the global token (admin only).
+ * Useful to discover account IDs when adding a new client.
  */
-router.get('/ad-accounts', async (req, res, next) => {
+router.get('/available', requireAdmin, async (req, res, next) => {
   try {
-    const { accessToken } = req.query;
-    if (!accessToken) {
-      return res.status(400).json({ error: 'accessToken query param is required', code: 400 });
-    }
-
-    const adAccounts = await getAdAccounts(accessToken);
+    const adAccounts = await getAdAccounts();
     return res.status(200).json({ adAccounts });
   } catch (err) {
     if (err.response) {
       return res.status(400).json({
-        error: 'Meta API error: ' + (err.response.data?.error?.message || 'Unknown error'),
+        error: 'Meta API error: ' + (err.response.data?.error?.message || 'Erro desconhecido'),
         code: 400,
       });
     }

@@ -130,14 +130,28 @@ export const webhooksApi = {
 
 // Meta Accounts API
 export const metaApi = {
-  list: () => api.get<MetaAccount[]>('/meta-accounts'),
+  list: () => api.get<{ accounts: MetaAccount[] }>('/meta-accounts'),
 
-  add: (data: { adAccountId: string; accessToken: string; businessName: string }) =>
-    api.post<MetaAccount>('/meta-accounts', data),
+  // Admin only: add account for a specific client (no token required — uses global token)
+  add: (data: { adAccountId: string; businessName: string; clientId: string; currency?: string }) =>
+    api.post<{ account: MetaAccount }>('/meta-accounts', data),
+
+  // Admin only: discover available ad accounts from the global token
+  available: () => api.get<{ adAccounts: Array<{ id: string; name: string; currency: string }> }>('/meta-accounts/available'),
 
   sync: (id: string) => api.post(`/meta-accounts/${id}/sync`),
 
   delete: (id: string) => api.delete(`/meta-accounts/${id}`),
+};
+
+export const adminApi = {
+  listClients: () => api.get<{ clients: Array<{ id: string; name: string; email: string; isActive: boolean; role: string }> }>('/admin/clients'),
+  createClient: (data: { name: string; email: string; password: string; role?: string }) =>
+    api.post('/admin/clients', data),
+  updateClient: (id: string, data: { name?: string; email?: string; password?: string }) =>
+    api.put(`/admin/clients/${id}`, data),
+  toggleStatus: (id: string) => api.patch(`/admin/clients/${id}/toggle`),
+  getClientMetaAccounts: (id: string) => api.get(`/admin/clients/${id}/meta-accounts`),
 };
 
 export default api;

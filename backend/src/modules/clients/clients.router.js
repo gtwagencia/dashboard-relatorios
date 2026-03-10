@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const clientsService = require('./clients.service');
+const { query } = require('../../config/database');
 const { authenticate, requireAdmin } = require('../../middleware/auth');
 
 const router = Router();
@@ -82,9 +83,27 @@ router.patch('/:id/toggle', async (req, res, next) => {
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    // We implement delete as a deactivation to preserve relational data
     const client = await clientsService.toggleStatus(req.params.id);
     return res.status(200).json({ message: 'Client deactivated', client });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/admin/clients/:id/meta-accounts
+ * List all Meta accounts assigned to a specific client.
+ */
+router.get('/:id/meta-accounts', async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, ad_account_id, business_name, currency, timezone, synced_at, created_at
+       FROM meta_accounts
+       WHERE client_id = $1
+       ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    return res.status(200).json({ accounts: rows });
   } catch (err) {
     next(err);
   }

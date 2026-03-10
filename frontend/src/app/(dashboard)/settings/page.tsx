@@ -2,8 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
-import { metaApi, webhooksApi } from '@/lib/api';
+import { metaApi, adminApi, webhooksApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/formatters';
+import { getUser } from '@/lib/auth';
 import TopBar from '@/components/layout/TopBar';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -19,39 +20,54 @@ type SettingsTab = 'meta' | 'webhooks' | 'reports';
 // ============================================================
 
 function MetaAccountsTab() {
+  const user = getUser();
+  const isAdmin = user?.role === 'admin';
+
   const [adAccountId, setAdAccountId] = useState('');
-  const [accessToken, setAccessToken] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [adding, setAdding] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
-  const { data: accounts, isLoading, mutate } = useSWR<MetaAccount[]>(
+  const { data: accountsData, isLoading, mutate } = useSWR(
     'meta-accounts',
-    () => metaApi.list().then((r) => r.data)
+    () => metaApi.list().then((r) => r.data.accounts)
   );
+  const accounts: MetaAccount[] = accountsData || [];
+
+  // Admin: load client list to populate selector
+  const { data: clientsData } = useSWR(
+    isAdmin ? 'admin-clients' : null,
+    () => adminApi.listClients().then((r) => r.data.clients)
+  );
+  const clients = clientsData || [];
 
   async function handleAdd() {
-    if (!adAccountId.trim() || !accessToken.trim() || !businessName.trim()) {
-      toast.error('Preencha todos os campos.');
+    if (!adAccountId.trim() || !businessName.trim()) {
+      toast.error('Preencha o ID da conta e o nome do negócio.');
+      return;
+    }
+    if (isAdmin && !selectedClientId) {
+      toast.error('Selecione o cliente desta conta.');
       return;
     }
     setAdding(true);
     try {
       await metaApi.add({
         adAccountId: adAccountId.trim(),
-        accessToken: accessToken.trim(),
         businessName: businessName.trim(),
+        clientId: selectedClientId || user!.id,
       });
       await mutate();
       setAdAccountId('');
-      setAccessToken('');
       setBusinessName('');
+      setSelectedClientId('');
       setShowForm(false);
-      toast.success('Conta Meta adicionada com sucesso!');
+      toast.success('Conta Meta adicionada! Sincronização iniciada.');
     } catch {
-      toast.error('Erro ao adicionar conta. Verifique as credenciais.');
+      toast.error('Erro ao adicionar conta. Verifique o ID da conta.');
     } finally {
       setAdding(false);
     }
@@ -88,30 +104,50 @@ function MetaAccountsTab() {
     <div className="space-y-5">
       <Card
         title="Contas Meta Ads Conectadas"
-        subtitle="Gerencie as contas de anúncio vinculadas ao dashboard"
+        subtitle="Contas de anúncio vinculadas a cada cliente"
         action={
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowForm((v) => !v)}
-            icon={
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-            }
-          >
-            Adicionar Conta
-          </Button>
+          isAdmin ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowForm((v) => !v)}
+              icon={
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              }
+            >
+              Adicionar Conta
+            </Button>
+          ) : undefined
         }
       >
-        {/* Add Form */}
-        {showForm && (
+        {/* Add Form — admin only */}
+        {showForm && isAdmin && (
           <div className="mb-5 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
             <h4 className="text-sm font-semibold text-blue-800">Nova Conta Meta Ads</h4>
+            <p className="text-xs text-blue-600">
+              O token de acesso é configurado globalmente via variável de ambiente <code className="bg-blue-100 px-1 rounded">META_ACCESS_TOKEN</code>.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  ID da Conta de Anúncio
+                  Cliente *
+                </label>
+                <select
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">Selecione o cliente...</option>
+                  {clients.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  ID da Conta de Anúncio *
                 </label>
                 <input
                   type="text"
@@ -133,18 +169,6 @@ function MetaAccountsTab() {
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Access Token
-                </label>
-                <input
-                  type="password"
-                  placeholder="EAABsbCS..."
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
             </div>
             <div className="flex gap-2 pt-1">
               <Button variant="primary" size="sm" loading={adding} onClick={handleAdd}>
@@ -154,6 +178,11 @@ function MetaAccountsTab() {
                 Cancelar
               </Button>
             </div>
+          </div>
+        )}
+        {showForm && !isAdmin && (
+          <div className="mb-5 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
+            Apenas administradores podem adicionar contas Meta. Entre em contato com o suporte.
           </div>
         )}
 

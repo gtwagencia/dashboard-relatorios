@@ -61,6 +61,16 @@ const api = axios.create({
   timeout: 30000,
 });
 
+/**
+ * Returns the global Meta access token from environment variables.
+ * @returns {string}
+ */
+function getGlobalToken() {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) throw new Error('META_ACCESS_TOKEN não configurado no ambiente');
+  return token;
+}
+
 // ── Rate-limit helpers ────────────────────────────────────────────────────────
 
 /**
@@ -110,14 +120,13 @@ function sleep(ms) {
 // ── API Calls ─────────────────────────────────────────────────────────────────
 
 /**
- * Get all ad accounts accessible by the provided user token.
- * @param {string} accessToken
+ * Get all ad accounts accessible by the global token.
  * @returns {Promise<object[]>}
  */
-async function getAdAccounts(accessToken) {
+async function getAdAccounts() {
   const response = await api.get('/me/adaccounts', {
     params: {
-      access_token: accessToken,
+      access_token: getGlobalToken(),
       fields: 'id,name,account_id,currency,timezone_name,business',
       limit: 100,
     },
@@ -133,11 +142,10 @@ async function getAdAccounts(accessToken) {
 
 /**
  * Fetch all campaigns for an ad account (follows pagination).
- * @param {string} accessToken
  * @param {string} adAccountId  - e.g. 'act_123456789'
  * @returns {Promise<object[]>}
  */
-async function getCampaigns(accessToken, adAccountId) {
+async function getCampaigns(adAccountId) {
   const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   const campaigns = [];
   let url = `/${accountId}/campaigns`;
@@ -146,7 +154,7 @@ async function getCampaigns(accessToken, adAccountId) {
   while (hasMore) {
     const response = await api.get(url, {
       params: {
-        access_token: accessToken,
+        access_token: getGlobalToken(),
         fields:
           'id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time,configured_status',
         limit: 200,
@@ -180,15 +188,14 @@ async function getCampaigns(accessToken, adAccountId) {
 
 /**
  * Get insights for a specific campaign.
- * @param {string} accessToken
  * @param {string} campaignId
  * @param {string} [datePreset='last_30d'] - Meta date preset
  * @returns {Promise<object[]>}
  */
-async function getCampaignInsights(accessToken, campaignId, datePreset = 'last_30d') {
+async function getCampaignInsights(campaignId, datePreset = 'last_30d') {
   const response = await api.get(`/${campaignId}/insights`, {
     params: {
-      access_token: accessToken,
+      access_token: getGlobalToken(),
       fields: INSIGHT_FIELDS,
       date_preset: datePreset,
       time_increment: 1, // daily breakdown
@@ -207,18 +214,17 @@ async function getCampaignInsights(accessToken, campaignId, datePreset = 'last_3
 
 /**
  * Get aggregate insights for an ad account over a custom date range.
- * @param {string} accessToken
  * @param {string} adAccountId
  * @param {string} dateFrom  - YYYY-MM-DD
  * @param {string} dateTo    - YYYY-MM-DD
  * @returns {Promise<object[]>}
  */
-async function getAccountInsights(accessToken, adAccountId, dateFrom, dateTo) {
+async function getAccountInsights(adAccountId, dateFrom, dateTo) {
   const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
 
   const response = await api.get(`/${accountId}/insights`, {
     params: {
-      access_token: accessToken,
+      access_token: getGlobalToken(),
       fields: INSIGHT_FIELDS,
       time_range: JSON.stringify({ since: dateFrom, until: dateTo }),
       time_increment: 1,

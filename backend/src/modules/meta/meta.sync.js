@@ -1,7 +1,6 @@
 'use strict';
 
 const { query } = require('../../config/database');
-const { decrypt } = require('../../utils/crypto');
 const { getCampaigns, getCampaignInsights, normaliseInsight, OBJECTIVE_MAP } = require('./meta.service');
 const logger = require('../../utils/logger');
 
@@ -105,8 +104,7 @@ async function syncAccount(metaAccountId) {
 
   // 1. Load account record
   const { rows: accountRows } = await query(
-    `SELECT id, ad_account_id, access_token_enc, client_id
-     FROM meta_accounts WHERE id = $1`,
+    `SELECT id, ad_account_id, client_id FROM meta_accounts WHERE id = $1`,
     [metaAccountId]
   );
 
@@ -116,19 +114,10 @@ async function syncAccount(metaAccountId) {
 
   const account = accountRows[0];
 
-  // 2. Decrypt access token
-  let accessToken;
-  try {
-    accessToken = decrypt(account.access_token_enc);
-  } catch (err) {
-    logger.error('Failed to decrypt access token', { metaAccountId, error: err.message });
-    throw new Error('Cannot decrypt access token');
-  }
-
-  // 3. Fetch campaigns from Meta API
+  // 2. Fetch campaigns from Meta API using global token
   let campaigns;
   try {
-    campaigns = await getCampaigns(accessToken, account.ad_account_id);
+    campaigns = await getCampaigns(account.ad_account_id);
   } catch (err) {
     logger.error('Failed to fetch campaigns from Meta API', {
       metaAccountId,
@@ -152,7 +141,7 @@ async function syncAccount(metaAccountId) {
       const campaignStatus = campaign.status || campaign.configured_status || '';
 
       if (syncableStatuses.includes(campaignStatus.toUpperCase())) {
-        const insights = await getCampaignInsights(accessToken, campaign.id, 'last_30d');
+        const insights = await getCampaignInsights(campaign.id, 'last_30d');
 
         for (const insight of insights) {
           const metrics = normaliseInsight(insight);
@@ -172,7 +161,7 @@ async function syncAccount(metaAccountId) {
 
   // 5. Update synced_at on the account
   await query(
-    `UPDATE meta_accounts SET created_at = created_at WHERE id = $1`,
+    `UPDATE meta_accounts SET synced_at = NOW() WHERE id = $1`,
     [metaAccountId]
   );
 
