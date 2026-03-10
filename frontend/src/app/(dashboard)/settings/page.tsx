@@ -285,7 +285,7 @@ function WebhooksTab() {
 
   const { data: webhooks, isLoading, mutate } = useSWR<WebhookConfig[]>(
     'webhooks',
-    () => webhooksApi.list().then((r) => r.data)
+    () => webhooksApi.list().then((r) => r.data.webhooks)
   );
 
   async function handleAdd() {

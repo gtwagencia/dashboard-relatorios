@@ -30,15 +30,15 @@ function getDateRange(range: DateRangeValue): { from: string; to: string } {
 }
 
 function fetchSummary(from: string, to: string) {
-  return metricsApi.getSummary(from, to).then((r) => r.data);
+  return metricsApi.getSummary(from, to).then((r) => r.data.summary);
 }
 
 function fetchByObjective(from: string, to: string) {
-  return metricsApi.getByObjective(from, to).then((r) => r.data);
+  return metricsApi.getByObjective(from, to).then((r) => r.data.byObjective);
 }
 
 function fetchTimeseries(from: string, to: string) {
-  return metricsApi.getTimeseries(from, to).then((r) => r.data);
+  return metricsApi.getTimeseries(from, to).then((r) => r.data.timeseries);
 }
 
 export default function DashboardPage() {

@@ -72,12 +72,12 @@ export default function CampaignDetailPage() {
 
   const { data: campaign, isLoading: loadingCampaign } = useSWR<Campaign>(
     id ? ['campaign', id] : null,
-    () => campaignsApi.get(id).then((r) => r.data)
+    () => campaignsApi.get(id).then((r) => r.data.campaign)
   );
 
   const { data: metrics, isLoading: loadingMetrics } = useSWR<CampaignMetrics[]>(
     id ? ['campaign-metrics', id, from, to] : null,
-    () => campaignsApi.getMetrics(id, from, to).then((r) => r.data)
+    () => campaignsApi.getMetrics(id, from, to).then((r) => r.data.metrics)
   );
 
   const {
@@ -86,7 +86,7 @@ export default function CampaignDetailPage() {
     mutate: mutateInsights,
   } = useSWR<AiInsight[]>(
     id ? ['ai-insights', id] : null,
-    () => aiApi.getInsights(id, 5).then((r) => r.data)
+    () => aiApi.getInsights(id, 5).then((r) => r.data.insights)
   );
 
   const aggregated = metrics?.reduce(

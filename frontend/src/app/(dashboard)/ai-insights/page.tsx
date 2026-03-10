@@ -97,7 +97,7 @@ export default function AiInsightsPage() {
     mutate: mutateAccount,
   } = useSWR<AiInsight[]>(
     'ai-insights-account',
-    () => aiApi.getInsights(undefined, 10).then((r) => r.data)
+    () => aiApi.getInsights(undefined, 10).then((r) => r.data.insights)
   );
 
   // Campaign-level insights
@@ -107,7 +107,7 @@ export default function AiInsightsPage() {
     mutate: mutateCampaign,
   } = useSWR<AiInsight[]>(
     selectedCampaignId ? ['ai-insights-campaign', selectedCampaignId] : null,
-    () => aiApi.getInsights(selectedCampaignId, 10).then((r) => r.data)
+    () => aiApi.getInsights(selectedCampaignId, 10).then((r) => r.data.insights)
   );
 
   const handleRefresh = useCallback(async () => {

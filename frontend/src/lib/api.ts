@@ -59,14 +59,14 @@ export const authApi = {
 // Metrics API
 export const metricsApi = {
   getSummary: (from: string, to: string) =>
-    api.get<MetricsSummary>('/metrics/summary', { params: { from, to } }),
+    api.get<{ summary: MetricsSummary }>('/metrics/summary', { params: { dateFrom: from, dateTo: to } }),
 
   getByObjective: (from: string, to: string) =>
-    api.get<ObjectiveMetrics[]>('/metrics/by-objective', { params: { from, to } }),
+    api.get<{ byObjective: ObjectiveMetrics[] }>('/metrics/by-objective', { params: { dateFrom: from, dateTo: to } }),
 
   getTimeseries: (from: string, to: string, campaignId?: string) =>
-    api.get<TimeseriesPoint[]>('/metrics/timeseries', {
-      params: { from, to, ...(campaignId ? { campaignId } : {}) },
+    api.get<{ timeseries: TimeseriesPoint[] }>('/metrics/timeseries', {
+      params: { dateFrom: from, dateTo: to, ...(campaignId ? { campaignId } : {}) },
     }),
 };
 
@@ -80,10 +80,10 @@ export const campaignsApi = {
     limit?: number;
   }) => api.get<PaginatedResponse<Campaign>>('/campaigns', { params }),
 
-  get: (id: string) => api.get<Campaign>(`/campaigns/${id}`),
+  get: (id: string) => api.get<{ campaign: Campaign }>(`/campaigns/${id}`),
 
   getMetrics: (id: string, from: string, to: string) =>
-    api.get<CampaignMetrics[]>(`/campaigns/${id}/metrics`, { params: { from, to } }),
+    api.get<{ metrics: CampaignMetrics[] }>(`/campaigns/${id}/metrics`, { params: { dateFrom: from, dateTo: to } }),
 };
 
 // Reports API
@@ -102,7 +102,7 @@ export const reportsApi = {
 // AI API
 export const aiApi = {
   getInsights: (campaignId?: string, limit?: number) =>
-    api.get<AiInsight[]>('/ai/insights', {
+    api.get<{ insights: AiInsight[] }>('/ai/insights', {
       params: {
         ...(campaignId ? { campaignId } : {}),
         ...(limit ? { limit } : {}),
@@ -115,7 +115,7 @@ export const aiApi = {
 
 // Webhooks API
 export const webhooksApi = {
-  list: () => api.get<WebhookConfig[]>('/webhooks'),
+  list: () => api.get<{ webhooks: WebhookConfig[] }>('/webhooks'),
 
   create: (data: { eventType: string; url: string; secret?: string }) =>
     api.post<WebhookConfig>('/webhooks', data),
