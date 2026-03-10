@@ -261,20 +261,23 @@ function normaliseInsight(insight) {
   const actionValues = insight.action_values || [];
   const costPerAction = insight.cost_per_action_type || [];
 
-  // Count all lead-type actions: form leads, WhatsApp, DMs, messaging, link clicks to wa/ig
-  const leadActions = [
-    'lead',
-    'onsite_conversion.lead_grouped',
-    'onsite_conversion.messaging_first_reply',         // WhatsApp/Messenger first reply
-    'onsite_conversion.messaging_conversation_started_7d', // conversations started
-    'onsite_conversion.messaging_welcome_message_view', // WhatsApp welcome views
-    'onsite_conversion.total_messaging_connection',     // total messaging connections
-    'contact',                                          // contact button clicks
-    'offsite_conversion.fb_pixel_lead',                 // pixel lead events
-    'omni_initiated_checkout',                          // checkout initiations (sales funnel)
-  ];
-  const leads = leadActions.reduce((sum, type) => sum + extractActionValue(actions, type), 0)
-    || extractActionValue(actions, 'onsite_conversion.lead_grouped');
+  // Lead count — use Meta's own deduplicated total to avoid double counting.
+  // lead_grouped = Meta's official "Results" metric for leads objectives (includes WhatsApp,
+  // Messenger, form leads, etc. all deduplicated). Fall back to individual types only when absent.
+  const leads =
+    extractActionValue(actions, 'onsite_conversion.lead_grouped') ||  // primary (deduplicated)
+    extractActionValue(actions, 'lead') ||                            // lead form objective
+    extractActionValue(actions, 'onsite_conversion.messaging_first_reply') || // WhatsApp/Messenger
+    extractActionValue(actions, 'offsite_conversion.fb_pixel_lead');  // pixel lead event
+
+  // Debug: log action types when leads = 0 but spend > 0 (helps diagnose missing lead tracking)
+  if (leads === 0 && parseFloat(insight.spend || 0) > 0 && actions.length > 0) {
+    logger.debug('No leads detected despite spend — action types received from Meta', {
+      spend: insight.spend,
+      date: insight.date_start,
+      actionTypes: actions.map((a) => `${a.action_type}:${a.value}`),
+    });
+  }
   const conversions = extractActionValue(actions, 'offsite_conversion.fb_pixel_purchase') +
     extractActionValue(actions, 'purchase');
 
