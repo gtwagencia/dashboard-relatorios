@@ -29,8 +29,11 @@ export interface Campaign {
   adAccountId?: string;
   currency?: string;
   totalSpend?: number;
+  totalImpressions?: number;
   totalLeads?: number;
   totalClicks?: number;
+  totalConversions?: number;
+  totalConversionsValue?: number;
 }
 
 export interface CampaignMetrics {

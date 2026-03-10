@@ -5,7 +5,7 @@ import { logout, getUser } from '@/lib/auth';
 import Button from '@/components/ui/Button';
 import clsx from 'clsx';
 
-export type DateRangeValue = '7d' | '30d' | '90d';
+export type DateRangeValue = '7d' | '30d' | '90d' | 'custom';
 
 interface DateRangeOption {
   label: string;
@@ -16,6 +16,7 @@ const DATE_RANGES: DateRangeOption[] = [
   { label: '7 dias', value: '7d' },
   { label: '30 dias', value: '30d' },
   { label: '90 dias', value: '90d' },
+  { label: 'Personalizado', value: 'custom' },
 ];
 
 interface TopBarProps {
@@ -23,7 +24,8 @@ interface TopBarProps {
   onRefresh?: () => void;
   refreshing?: boolean;
   dateRange?: DateRangeValue;
-  onDateRangeChange?: (range: DateRangeValue) => void;
+  /** Called when preset changes. For 'custom', also receives the selected from/to dates. */
+  onDateRangeChange?: (range: DateRangeValue, customFrom?: string, customTo?: string) => void;
   showDateRange?: boolean;
 }
 
@@ -36,6 +38,8 @@ export default function TopBar({
   showDateRange = true,
 }: TopBarProps) {
   const [loggingOut, setLoggingOut] = useState(false);
+  const [localFrom, setLocalFrom] = useState('');
+  const [localTo, setLocalTo] = useState('');
   const user = getUser();
 
   async function handleLogout() {
@@ -47,28 +51,74 @@ export default function TopBar({
     }
   }
 
+  function handlePresetClick(range: DateRangeValue) {
+    if (range !== 'custom') {
+      onDateRangeChange?.(range);
+    } else {
+      // Switch to custom mode; wait for user to pick dates and click Aplicar
+      onDateRangeChange?.('custom');
+    }
+  }
+
+  function handleApplyCustom() {
+    if (localFrom && localTo && localFrom <= localTo) {
+      onDateRangeChange?.('custom', localFrom, localTo);
+    }
+  }
+
+  const canApply = Boolean(localFrom && localTo && localFrom <= localTo);
+
   return (
-    <header className="flex items-center gap-4 px-6 py-4 bg-white border-b border-gray-100 shrink-0">
+    <header className="flex items-center gap-3 px-6 py-4 bg-white border-b border-gray-100 shrink-0 flex-wrap">
       {/* Title */}
       <h1 className="text-lg font-semibold text-gray-800 mr-auto">{title}</h1>
 
-      {/* Date Range Picker */}
+      {/* Date Range */}
       {showDateRange && onDateRangeChange && (
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-          {DATE_RANGES.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => onDateRangeChange(opt.value)}
-              className={clsx(
-                'px-3 py-1.5 rounded-md text-xs font-medium transition-all',
-                dateRange === opt.value
-                  ? 'bg-white text-gray-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            {DATE_RANGES.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => handlePresetClick(opt.value)}
+                className={clsx(
+                  'px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap',
+                  dateRange === opt.value
+                    ? 'bg-white text-gray-800 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={localFrom}
+                onChange={(e) => setLocalFrom(e.target.value)}
+                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <span className="text-gray-400 text-xs">até</span>
+              <input
+                type="date"
+                value={localTo}
+                min={localFrom || undefined}
+                onChange={(e) => setLocalTo(e.target.value)}
+                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleApplyCustom}
+                disabled={!canApply}
+              >
+                Aplicar
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

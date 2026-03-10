@@ -226,19 +226,50 @@ async function getAccountBalance(adAccountId) {
   const response = await api.get(`/${accountId}`, {
     params: {
       access_token: await getGlobalToken(),
-      fields: 'balance,currency,amount_spent,spend_cap,account_status,funding_source_details',
+      fields: [
+        'balance',
+        'currency',
+        'amount_spent',
+        'spend_cap',
+        'account_status',
+        'funding_source_details',
+        'adspaymentcycle',
+      ].join(','),
     },
   });
 
   const d = response.data;
-  // Values come in cents; divide by 100 for the real amount
+
+  // Meta returns monetary values in the minimum currency unit (cents for BRL/USD/EUR).
+  // Use parseFloat to preserve any fractional cents, then divide by 100.
+  const toAmount = (raw) => (raw != null && raw !== '' ? parseFloat(raw) / 100 : 0);
+
+  // Log raw values so discrepancies can be diagnosed
+  logger.debug('Meta account balance raw response', {
+    adAccountId,
+    balance: d.balance,
+    amount_spent: d.amount_spent,
+    spend_cap: d.spend_cap,
+    currency: d.currency,
+    account_status: d.account_status,
+    adspaymentcycle: d.adspaymentcycle,
+  });
+
   return {
-    balance: parseInt(d.balance || 0, 10) / 100,
+    balance: toAmount(d.balance),
     currency: d.currency || 'BRL',
-    amountSpent: parseInt(d.amount_spent || 0, 10) / 100,
-    spendCap: parseInt(d.spend_cap || 0, 10) / 100,
+    amountSpent: toAmount(d.amount_spent),
+    spendCap: toAmount(d.spend_cap),
     accountStatus: d.account_status,
     displayString: d.funding_source_details?.display_string || null,
+    // raw values for the diagnostic endpoint
+    _raw: {
+      balance: d.balance,
+      amount_spent: d.amount_spent,
+      spend_cap: d.spend_cap,
+      adspaymentcycle: d.adspaymentcycle,
+      funding_source_details: d.funding_source_details,
+    },
   };
 }
 

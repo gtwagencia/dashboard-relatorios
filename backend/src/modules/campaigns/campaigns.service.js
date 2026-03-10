@@ -84,17 +84,18 @@ async function getCampaigns(clientId, filters = {}) {
        ma.business_name,
        ma.ad_account_id,
        ma.currency,
-       COALESCE(SUM(cm.spend), 0)       AS total_spend,
-       COALESCE(SUM(cm.impressions), 0) AS total_impressions,
-       COALESCE(SUM(cm.clicks), 0)      AS total_clicks,
-       COALESCE(SUM(cm.leads), 0)       AS total_leads,
-       COALESCE(SUM(cm.conversions), 0) AS total_conversions
+       COALESCE(SUM(cm.spend), 0)::NUMERIC(14,2)        AS total_spend,
+       COALESCE(SUM(cm.impressions), 0)::BIGINT          AS total_impressions,
+       COALESCE(SUM(cm.clicks), 0)::BIGINT               AS total_clicks,
+       COALESCE(SUM(cm.leads), 0)::INT                   AS total_leads,
+       COALESCE(SUM(cm.conversions), 0)::INT             AS total_conversions,
+       COALESCE(SUM(cm.conversions_value), 0)::NUMERIC(14,2) AS total_conversions_value
      FROM campaigns c
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
      LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id ${joinDateClause}
      ${whereClause}
      GROUP BY c.id, ma.business_name, ma.ad_account_id, ma.currency
-     ORDER BY c.created_at DESC
+     ORDER BY c.synced_at DESC NULLS LAST, c.created_at DESC
      LIMIT $${dataIdx++} OFFSET $${dataIdx++}`,
     [...dataParams, limit, offset]
   );
@@ -114,8 +115,11 @@ async function getCampaigns(clientId, filters = {}) {
     adAccountId: c.ad_account_id,
     currency: c.currency,
     totalSpend: Number(c.total_spend),
+    totalImpressions: Number(c.total_impressions),
     totalLeads: Number(c.total_leads),
     totalClicks: Number(c.total_clicks),
+    totalConversions: Number(c.total_conversions),
+    totalConversionsValue: Number(c.total_conversions_value),
   }));
 
   return { data, total, page, limit, totalPages: Math.ceil(total / limit) };

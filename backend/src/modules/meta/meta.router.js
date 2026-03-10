@@ -220,6 +220,34 @@ router.get('/:id/balance', async (req, res, next) => {
 });
 
 /**
+ * GET /api/meta-accounts/:id/raw-balance
+ * Returns raw balance fields from Meta API for diagnostics. ADMIN ONLY.
+ * Shows which field represents the correct "saldo disponível" for this account type.
+ */
+router.get('/:id/raw-balance', requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT ad_account_id FROM meta_accounts WHERE id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    }
+
+    const balance = await getAccountBalance(rows[0].ad_account_id);
+    return res.status(200).json({ balance });
+  } catch (err) {
+    if (err.response) {
+      return res.status(400).json({
+        error: 'Meta API error: ' + (err.response.data?.error?.message || 'Erro desconhecido'),
+        code: 400,
+      });
+    }
+    next(err);
+  }
+});
+
+/**
  * GET /api/meta-accounts/:id/raw-insights?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
  * Returns raw Meta API insight data (actions array) for a date range. ADMIN ONLY.
  * Use this to diagnose which action_type fields Meta is returning for a given account/period.

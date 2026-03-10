@@ -19,21 +19,29 @@ import ObjectivePieChart from '@/components/charts/ObjectivePieChart';
 import MetricsBarChart from '@/components/charts/MetricsBarChart';
 import { Campaign, MetaAccount, MetricsSummary, ObjectiveMetrics, TimeseriesPoint } from '@/types';
 
-function getDateRange(range: DateRangeValue): { from: string; to: string } {
+function getDateRange(
+  range: DateRangeValue,
+  customFrom?: string,
+  customTo?: string
+): { from: string; to: string } {
+  if (range === 'custom' && customFrom && customTo) {
+    return { from: customFrom, to: customTo };
+  }
   const to = new Date();
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
-  const from = subDays(to, days);
   return {
-    from: format(from, 'yyyy-MM-dd'),
+    from: format(subDays(to, days), 'yyyy-MM-dd'),
     to: format(to, 'yyyy-MM-dd'),
   };
 }
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
-  const { from, to } = getDateRange(dateRange);
+  const { from, to } = getDateRange(dateRange, customFrom, customTo);
 
   const { data: accountsData } = useSWR<MetaAccount[]>(
     'meta-accounts-dashboard',
@@ -42,13 +50,9 @@ export default function DashboardPage() {
   const accounts = accountsData ?? [];
 
   const { data: campaignsData } = useSWR<Campaign[]>(
-    ['campaigns-dashboard', selectedAccountId, from, to],
-    () => campaignsApi.list({
-      metaAccountId: selectedAccountId || undefined,
-      limit: 200,
-      dateFrom: from,
-      dateTo: to,
-    }).then((r) => r.data.data.filter((c) => (c.totalSpend ?? 0) > 0 || (c.totalLeads ?? 0) > 0))
+    ['campaigns-dashboard', selectedAccountId],
+    () => campaignsApi.list({ metaAccountId: selectedAccountId || undefined, limit: 200 })
+      .then((r) => r.data.data)
   );
   const campaigns = campaignsData ?? [];
 
@@ -96,8 +100,11 @@ export default function DashboardPage() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([mutateSummary(), mutateObjective(), mutateTimeseries()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([mutateSummary(), mutateObjective(), mutateTimeseries()]);
+    } finally {
+      setRefreshing(false);
+    }
   }, [mutateSummary, mutateObjective, mutateTimeseries]);
 
   const handleAccountChange = (accountId: string) => {
@@ -105,13 +112,38 @@ export default function DashboardPage() {
     setSelectedCampaignId('');
   };
 
-  const handleDateRangeChange = (range: DateRangeValue) => {
+  const handleDateRangeChange = (range: DateRangeValue, cfrom?: string, cto?: string) => {
     setDateRange(range);
+    if (range === 'custom' && cfrom && cto) {
+      setCustomFrom(cfrom);
+      setCustomTo(cto);
+    }
     setSelectedCampaignId('');
   };
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const currency = selectedAccount?.currency || 'BRL';
+
+  // Objective-specific cost calculations:
+  // Cost per lead uses only spend from lead-objective campaigns
+  // Cost per sale uses only spend from sales-objective campaigns
+  const LEAD_OBJECTIVES = ['OUTCOME_LEADS', 'LEAD_GENERATION'];
+  const SALES_OBJECTIVES = ['OUTCOME_SALES', 'CONVERSIONS', 'PRODUCT_CATALOG_SALES'];
+
+  const leadRows = (byObjective ?? []).filter((o) =>
+    LEAD_OBJECTIVES.includes((o.objectiveType || o.objective)?.toUpperCase())
+  );
+  const salesRows = (byObjective ?? []).filter((o) =>
+    SALES_OBJECTIVES.includes((o.objectiveType || o.objective)?.toUpperCase())
+  );
+
+  const leadSpend = leadRows.reduce((s, o) => s + o.spend, 0);
+  const leadCount = leadRows.reduce((s, o) => s + o.leads, 0);
+  const saleSpend = salesRows.reduce((s, o) => s + o.spend, 0);
+  const saleCount = salesRows.reduce((s, o) => s + o.conversions, 0);
+
+  const costPerLeadCalc = leadCount > 0 ? leadSpend / leadCount : null;
+  const costPerSaleCalc = saleCount > 0 ? saleSpend / saleCount : null;
 
   const pieData = (byObjective ?? []).map((o) => ({
     objective: o.objectiveType || o.objective,
@@ -256,12 +288,8 @@ export default function DashboardPage() {
           />
           <KpiCard
             label="Custo por Lead"
-            value={
-              summary && summary.totalLeads > 0
-                ? formatCurrency(summary.totalSpend / summary.totalLeads)
-                : '-'
-            }
-            loading={loadingSummary}
+            value={costPerLeadCalc !== null ? formatCurrency(costPerLeadCalc, currency) : '-'}
+            loading={loadingObjective}
             accentColor="purple"
             icon={
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
@@ -327,12 +355,8 @@ export default function DashboardPage() {
           />
           <KpiCard
             label="Custo por Venda"
-            value={
-              summary && summary.totalConversions > 0
-                ? formatCurrency(summary.totalSpend / summary.totalConversions)
-                : '-'
-            }
-            loading={loadingSummary}
+            value={costPerSaleCalc !== null ? formatCurrency(costPerSaleCalc, currency) : '-'}
+            loading={loadingObjective}
             accentColor="purple"
             icon={
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="w-5 h-5">

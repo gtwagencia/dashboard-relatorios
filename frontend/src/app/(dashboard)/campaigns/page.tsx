@@ -7,6 +7,7 @@ import { subDays, format } from 'date-fns';
 import { campaignsApi, reportsApi, metaApi } from '@/lib/api';
 import {
   formatCurrency,
+  formatNumber,
   formatDate,
   getObjectiveLabel,
   getObjectiveColor,
@@ -36,6 +37,22 @@ const STATUSES = [
   { value: 'ARCHIVED', label: 'Arquivado' },
 ];
 
+function getDateRange(
+  range: DateRangeValue,
+  customFrom?: string,
+  customTo?: string
+): { dateFrom: string; dateTo: string } {
+  if (range === 'custom' && customFrom && customTo) {
+    return { dateFrom: customFrom, dateTo: customTo };
+  }
+  const to = new Date();
+  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  return {
+    dateFrom: format(subDays(to, days), 'yyyy-MM-dd'),
+    dateTo: format(to, 'yyyy-MM-dd'),
+  };
+}
+
 export default function CampaignsPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -44,18 +61,15 @@ export default function CampaignsPage() {
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [page, setPage] = useState(1);
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Compute dateFrom/dateTo from the selected range
-  const { dateFrom, dateTo } = useMemo(() => {
-    const to = new Date();
-    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
-    const from = subDays(to, days);
-    return {
-      dateFrom: format(from, 'yyyy-MM-dd'),
-      dateTo: format(to, 'yyyy-MM-dd'),
-    };
-  }, [dateRange]);
+  const { dateFrom, dateTo } = useMemo(
+    () => getDateRange(dateRange, customFrom, customTo),
+    [dateRange, customFrom, customTo]
+  );
 
   const { data: accountsData } = useSWR<MetaAccount[]>(
     'meta-accounts-campaigns',
@@ -85,8 +99,22 @@ export default function CampaignsPage() {
   const totalPages = data?.totalPages ?? 1;
 
   const handleRefresh = useCallback(async () => {
-    await mutate();
+    setRefreshing(true);
+    try {
+      await mutate();
+    } finally {
+      setRefreshing(false);
+    }
   }, [mutate]);
+
+  const handleDateRangeChange = (range: DateRangeValue, cfrom?: string, cto?: string) => {
+    setDateRange(range);
+    if (range === 'custom' && cfrom && cto) {
+      setCustomFrom(cfrom);
+      setCustomTo(cto);
+    }
+    setPage(1);
+  };
 
   async function handleExport() {
     setExporting(true);
@@ -104,13 +132,16 @@ export default function CampaignsPage() {
     }
   }
 
+  const COL_COUNT = 9;
+
   return (
     <div className="flex flex-col min-h-full">
       <TopBar
         title="Campanhas"
         onRefresh={handleRefresh}
+        refreshing={refreshing}
         dateRange={dateRange}
-        onDateRangeChange={setDateRange}
+        onDateRangeChange={handleDateRangeChange}
         showDateRange
       />
 
@@ -203,12 +234,14 @@ export default function CampaignsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="table-header pl-5">Nome</th>
-                  <th className="table-header">Objetivo</th>
-                  <th className="table-header">Status</th>
+                  <th className="table-header pl-5 text-left">Nome</th>
+                  <th className="table-header text-left">Objetivo</th>
+                  <th className="table-header text-left">Status</th>
                   <th className="table-header text-right">Investimento</th>
+                  <th className="table-header text-right">Impressões</th>
                   <th className="table-header text-right">Leads</th>
-                  <th className="table-header text-right">Cliques</th>
+                  <th className="table-header text-right">Vendas</th>
+                  <th className="table-header text-right">Receita Vendas</th>
                   <th className="table-header text-right pr-5">Início</th>
                 </tr>
               </thead>
@@ -216,7 +249,7 @@ export default function CampaignsPage() {
                 {isLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 7 }).map((_, j) => (
+                      {Array.from({ length: COL_COUNT }).map((_, j) => (
                         <td key={j} className="table-cell">
                           <div className="h-3 bg-gray-100 rounded animate-pulse" />
                         </td>
@@ -225,7 +258,7 @@ export default function CampaignsPage() {
                   ))
                 ) : campaigns.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-gray-400">
+                    <td colSpan={COL_COUNT} className="py-12 text-center text-gray-400">
                       Nenhuma campanha encontrada
                     </td>
                   </tr>
@@ -236,37 +269,37 @@ export default function CampaignsPage() {
                       onClick={() => router.push(`/campaigns/${campaign.id}`)}
                       className="hover:bg-blue-50/40 cursor-pointer transition-colors"
                     >
-                      <td className="table-cell pl-5 font-medium text-gray-800 max-w-[220px]">
+                      <td className="table-cell pl-5 font-medium text-gray-800 max-w-[200px]">
                         <span className="block truncate">{campaign.name}</span>
                         <span className="text-xs text-gray-400">{campaign.campaignId}</span>
                       </td>
                       <td className="table-cell">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getObjectiveColor(
-                            campaign.objective
-                          )}`}
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getObjectiveColor(campaign.objective)}`}
                         >
                           {getObjectiveLabel(campaign.objective)}
                         </span>
                       </td>
                       <td className="table-cell">
-                        <Badge
-                          variant={getStatusColor(campaign.status) as 'success' | 'warning' | 'danger' | 'info' | 'default'}
-                        >
+                        <Badge variant={getStatusColor(campaign.status) as 'success' | 'warning' | 'danger' | 'info' | 'default'}>
                           {getStatusLabel(campaign.status)}
                         </Badge>
                       </td>
                       <td className="table-cell text-right font-medium text-gray-800">
-                        {(campaign as any).totalSpend != null
-                          ? formatCurrency((campaign as any).totalSpend)
-                          : '-'}
+                        {campaign.totalSpend != null ? formatCurrency(campaign.totalSpend) : '-'}
                       </td>
-                      <td className="table-cell text-right">
-                        {(campaign as any).totalLeads ?? '-'}
+                      <td className="table-cell text-right text-gray-600">
+                        {campaign.totalImpressions != null ? formatNumber(campaign.totalImpressions) : '-'}
                       </td>
-                      <td className="table-cell text-right">
-                        {(campaign as any).totalClicks != null
-                          ? Number((campaign as any).totalClicks).toLocaleString('pt-BR')
+                      <td className="table-cell text-right text-gray-600">
+                        {campaign.totalLeads != null ? formatNumber(campaign.totalLeads) : '-'}
+                      </td>
+                      <td className="table-cell text-right text-gray-600">
+                        {campaign.totalConversions != null ? formatNumber(campaign.totalConversions) : '-'}
+                      </td>
+                      <td className="table-cell text-right text-gray-600">
+                        {campaign.totalConversionsValue != null && campaign.totalConversionsValue > 0
+                          ? formatCurrency(campaign.totalConversionsValue)
                           : '-'}
                       </td>
                       <td className="table-cell text-right pr-5 text-gray-500">
