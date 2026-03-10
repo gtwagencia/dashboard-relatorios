@@ -2,9 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
-import { metaApi, adminApi, webhooksApi, authApi } from '@/lib/api';
+import { metaApi, adminApi, webhooksApi, authApi, settingsApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/formatters';
-import { getUser } from '@/lib/auth';
+import { getUser, setToken } from '@/lib/auth';
 import TopBar from '@/components/layout/TopBar';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -13,7 +13,7 @@ import { MetaAccount, WebhookConfig } from '@/types';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
-type SettingsTab = 'meta' | 'webhooks' | 'reports' | 'profile' | 'clients';
+type SettingsTab = 'meta' | 'webhooks' | 'reports' | 'profile' | 'clients' | 'system';
 
 // ============================================================
 // Meta Accounts Tab
@@ -616,11 +616,39 @@ function AutoReportsTab() {
 // ============================================================
 
 function ProfileTab() {
-  const user = getUser();
+  const [user, setUser] = useState(getUser());
+  // Profile fields
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profileEmail, setProfileEmail] = useState(user?.email || '');
+  const [savingProfile, setSavingProfile] = useState(false);
+  // Password fields
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  async function handleSaveProfile() {
+    if (!profileName.trim() && !profileEmail.trim()) {
+      toast.error('Preencha nome ou e-mail.');
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const res = await authApi.updateProfile({
+        name: profileName.trim() || undefined,
+        email: profileEmail.trim() || undefined,
+      });
+      // Save new token so getUser() returns updated name/email
+      setToken(res.data.accessToken);
+      setUser(getUser());
+      toast.success('Perfil atualizado com sucesso!');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Erro ao atualizar perfil.';
+      toast.error(msg);
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   async function handleChangePassword() {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -635,7 +663,7 @@ function ProfileTab() {
       toast.error('A nova senha deve ter pelo menos 8 caracteres.');
       return;
     }
-    setSaving(true);
+    setSavingPassword(true);
     try {
       await authApi.changePassword(currentPassword, newPassword);
       toast.success('Senha alterada com sucesso!');
@@ -646,7 +674,7 @@ function ProfileTab() {
       const msg = err?.response?.data?.error || 'Erro ao alterar senha.';
       toast.error(msg);
     } finally {
-      setSaving(false);
+      setSavingPassword(false);
     }
   }
 
@@ -669,42 +697,73 @@ function ProfileTab() {
           </div>
         </div>
 
-        <h4 className="text-sm font-semibold text-gray-700 mb-4">Alterar Senha</h4>
-        <div className="space-y-3 max-w-sm">
+        <h4 className="text-sm font-semibold text-gray-700 mb-4">Editar Nome e E-mail</h4>
+        <div className="space-y-3 max-w-sm mb-6">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Senha Atual *</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome</label>
             <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
+              type="text"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
+              placeholder="Seu nome"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Nova Senha *</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
             <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              type="email"
+              value={profileEmail}
+              onChange={(e) => setProfileEmail(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Mínimo 8 caracteres"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Confirmar Nova Senha *</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Repita a nova senha"
+              placeholder="seu@email.com"
             />
           </div>
           <div className="pt-1">
-            <Button variant="primary" size="sm" loading={saving} onClick={handleChangePassword}>
-              Salvar Nova Senha
+            <Button variant="primary" size="sm" loading={savingProfile} onClick={handleSaveProfile}>
+              Salvar Alterações
             </Button>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-5">
+          <h4 className="text-sm font-semibold text-gray-700 mb-4">Alterar Senha</h4>
+          <div className="space-y-3 max-w-sm">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Senha Atual *</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="••••••••"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nova Senha *</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Mínimo 8 caracteres"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Confirmar Nova Senha *</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Repita a nova senha"
+              />
+            </div>
+            <div className="pt-1">
+              <Button variant="primary" size="sm" loading={savingPassword} onClick={handleChangePassword}>
+                Salvar Nova Senha
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
@@ -901,6 +960,166 @@ function ClientsTab() {
 }
 
 // ============================================================
+// System Settings Tab (admin only — Meta token, OpenAI key)
+// ============================================================
+
+function SystemSettingsTab() {
+  const { data, isLoading, mutate } = useSWR(
+    'system-settings',
+    () => settingsApi.getAll().then((r) => r.data.settings)
+  );
+
+  const [metaToken, setMetaToken] = useState('');
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
+  const [showOpenai, setShowOpenai] = useState(false);
+
+  // Initialise fields when data loads
+  const [initialised, setInitialised] = useState(false);
+  if (data && !initialised) {
+    setMetaToken(data['META_ACCESS_TOKEN'] || '');
+    setOpenaiKey(data['OPENAI_API_KEY'] || '');
+    setInitialised(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload: Record<string, string> = {};
+      if (metaToken.trim()) payload['META_ACCESS_TOKEN'] = metaToken.trim();
+      if (openaiKey.trim()) payload['OPENAI_API_KEY'] = openaiKey.trim();
+      if (Object.keys(payload).length === 0) {
+        toast.error('Nenhum token para salvar.');
+        return;
+      }
+      await settingsApi.update(payload);
+      await mutate();
+      toast.success('Tokens salvos com sucesso!');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erro ao salvar tokens.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function mask(value: string) {
+    if (!value) return '';
+    const start = value.slice(0, 8);
+    const end = value.slice(-4);
+    return `${start}${'•'.repeat(Math.max(0, value.length - 12))}${end}`;
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Configurações do Sistema"
+        subtitle="Tokens de API armazenados com segurança no banco de dados. Nunca expostos no código-fonte."
+      >
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2.5 text-sm text-amber-800">
+          <svg className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>
+            Apenas administradores têm acesso a esta tela. Os tokens são salvos no banco de dados e nunca ficam visíveis no repositório Git.
+          </span>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2].map((i) => <div key={i} className="h-16 bg-gray-50 rounded-lg animate-pulse" />)}
+          </div>
+        ) : (
+          <div className="space-y-4 max-w-lg">
+            {/* Meta Access Token */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Meta Access Token
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Token de acesso da API do Meta Ads (Business token ou System User token com permissão de leitura de anúncios).
+              </p>
+              <div className="relative">
+                <input
+                  type={showMeta ? 'text' : 'password'}
+                  value={metaToken}
+                  onChange={(e) => setMetaToken(e.target.value)}
+                  placeholder="EAAxxxxxxx..."
+                  className="w-full px-3 py-2 pr-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMeta((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showMeta ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {data?.['META_ACCESS_TOKEN'] && (
+                <p className="text-xs text-gray-400 mt-1">Atual: <code className="font-mono">{mask(data['META_ACCESS_TOKEN'])}</code></p>
+              )}
+            </div>
+
+            {/* OpenAI API Key */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                OpenAI API Key
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Chave da API do ChatGPT (OpenAI) usada para geração de insights com IA.
+              </p>
+              <div className="relative">
+                <input
+                  type={showOpenai ? 'text' : 'password'}
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  placeholder="sk-proj-..."
+                  className="w-full px-3 py-2 pr-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOpenai((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showOpenai ? (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {data?.['OPENAI_API_KEY'] && (
+                <p className="text-xs text-gray-400 mt-1">Atual: <code className="font-mono">{mask(data['OPENAI_API_KEY'])}</code></p>
+              )}
+            </div>
+
+            <div className="pt-1">
+              <Button variant="primary" loading={saving} onClick={handleSave}>
+                Salvar Tokens
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Settings Page
 // ============================================================
 
@@ -948,6 +1167,16 @@ export default function SettingsPage() {
       ),
     },
     {
+      key: 'system',
+      label: 'Tokens & API',
+      adminOnly: true,
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+        </svg>
+      ),
+    },
+    {
       key: 'profile',
       label: 'Meu Perfil',
       icon: (
@@ -990,6 +1219,7 @@ export default function SettingsPage() {
         {activeTab === 'reports' && <AutoReportsTab />}
         {activeTab === 'profile' && <ProfileTab />}
         {activeTab === 'clients' && isAdmin && <ClientsTab />}
+        {activeTab === 'system' && isAdmin && <SystemSettingsTab />}
       </div>
     </div>
   );

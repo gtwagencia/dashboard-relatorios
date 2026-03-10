@@ -23,6 +23,7 @@ const metricsRouter   = require('./modules/metrics/metrics.router');
 const reportsRouter   = require('./modules/reports/reports.router');
 const aiRouter        = require('./modules/ai/ai.router');
 const webhooksRouter  = require('./modules/webhooks/webhooks.router');
+const settingsRouter  = require('./modules/settings/settings.router');
 
 // ── App setup ─────────────────────────────────────────────────────────────────
 const app = express();
@@ -100,6 +101,9 @@ app.use('/api/webhooks', webhooksRouter);
 
 // Admin only: client management
 app.use('/api/admin/clients', clientsRouter);
+
+// Admin only: system settings (Meta token, OpenAI key)
+app.use('/api/settings', settingsRouter);
 
 // 404 handler for unknown routes
 app.use((req, res) => {

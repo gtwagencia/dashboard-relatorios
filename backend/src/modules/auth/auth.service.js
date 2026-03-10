@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { query } = require('../../config/database');
 const logger = require('../../utils/logger');
 
-const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 const REFRESH_TOKEN_EXPIRY_MS = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
@@ -26,6 +26,7 @@ function signAccessToken(client) {
   return jwt.sign(
     {
       id: client.id,
+      name: client.name,
       email: client.email,
       role: client.role,
       clientId: client.id,
@@ -206,4 +207,54 @@ async function changePassword(clientId, currentPassword, newPassword) {
   logger.info('Password changed', { clientId });
 }
 
-module.exports = { login, refresh, logout, changePassword };
+/**
+ * Update profile (name and/or email) for the authenticated client.
+ * Returns a new access token with updated claims.
+ * @param {string} clientId
+ * @param {{ name?: string, email?: string }} data
+ * @returns {Promise<{ accessToken: string, client: object }>}
+ */
+async function updateProfile(clientId, data) {
+  const { name, email } = data;
+
+  const setClauses = [];
+  const params = [];
+  let idx = 1;
+
+  if (name !== undefined && name.trim()) {
+    setClauses.push(`name = $${idx++}`);
+    params.push(name.trim());
+  }
+  if (email !== undefined && email.trim()) {
+    setClauses.push(`email = $${idx++}`);
+    params.push(email.toLowerCase().trim());
+  }
+
+  if (setClauses.length === 0) {
+    const err = new Error('Nenhum campo para atualizar');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  setClauses.push(`updated_at = NOW()`);
+  params.push(clientId);
+
+  const { rows } = await query(
+    `UPDATE clients SET ${setClauses.join(', ')} WHERE id = $${idx}
+     RETURNING id, name, email, role`,
+    params
+  );
+
+  if (rows.length === 0) {
+    const err = new Error('Client not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const client = rows[0];
+  const accessToken = signAccessToken(client);
+  logger.info('Profile updated', { clientId });
+  return { accessToken, client: { id: client.id, name: client.name, email: client.email, role: client.role } };
+}
+
+module.exports = { login, refresh, logout, changePassword, updateProfile };

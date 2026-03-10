@@ -21,10 +21,16 @@ export interface Campaign {
   name: string;
   objective: string;
   status: string;
-  dailyBudget: number;
-  lifetimeBudget: number;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
   startTime: string;
   endTime: string;
+  businessName?: string;
+  adAccountId?: string;
+  currency?: string;
+  totalSpend?: number;
+  totalLeads?: number;
+  totalClicks?: number;
 }
 
 export interface CampaignMetrics {
@@ -50,6 +56,7 @@ export interface MetricsSummary {
   totalReach: number;
   totalLeads: number;
   totalConversions: number;
+  totalConversionsValue: number;
   avgCtr: number;
   avgCpm: number;
   avgCpc: number;
@@ -72,9 +79,11 @@ export interface TimeseriesPoint {
   date: string;
   spend: number;
   impressions: number;
+  reach: number;
   clicks: number;
   leads: number;
   conversions: number;
+  conversionsValue: number;
   ctr: number;
   cpc: number;
   cpm: number;
@@ -89,6 +98,13 @@ export interface Report {
   status: string;
   createdAt: string;
   sentAt: string;
+  webhookUrl?: string;
+  errorMsg?: string;
+}
+
+export interface SystemSetting {
+  key: string;
+  value: string;
 }
 
 export interface AiInsight {

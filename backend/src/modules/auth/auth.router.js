@@ -75,6 +75,24 @@ router.get('/me', authenticate, (req, res) => {
 });
 
 /**
+ * PUT /api/auth/profile
+ * Update name and/or email. Returns new access token with updated claims.
+ * Body: { name?, email? }
+ */
+router.put('/profile', authenticate, async (req, res, next) => {
+  try {
+    const { name, email } = req.body;
+    if (!name && !email) {
+      return res.status(400).json({ error: 'Informe ao menos name ou email', code: 400 });
+    }
+    const result = await authService.updateProfile(req.user.clientId, { name, email });
+    return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/auth/change-password
  * Body: { currentPassword, newPassword }
  */

@@ -9,51 +9,65 @@ const { query } = require('../../config/database');
  * @returns {Promise<{ campaigns: object[], total: number, page: number, limit: number }>}
  */
 async function getCampaigns(clientId, filters = {}) {
-  const { objective, status, search, metaAccountId } = filters;
+  const { objective, status, search, metaAccountId, dateFrom, dateTo } = filters;
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 20));
   const offset = (page - 1) * limit;
 
   const conditions = [];
-  const params = [];
-  let paramIdx = 1;
+  const whereParams = [];
+  let whereIdx = 1;
 
   // null clientId means admin sees all campaigns
   if (clientId) {
-    conditions.push(`ma.client_id = $${paramIdx++}`);
-    params.push(clientId);
+    conditions.push(`ma.client_id = $${whereIdx++}`);
+    whereParams.push(clientId);
   }
   if (objective) {
-    conditions.push(`c.objective = $${paramIdx++}`);
-    params.push(objective);
+    conditions.push(`c.objective = $${whereIdx++}`);
+    whereParams.push(objective);
   }
   if (status) {
-    conditions.push(`c.status = $${paramIdx++}`);
-    params.push(status.toUpperCase());
+    conditions.push(`c.status = $${whereIdx++}`);
+    whereParams.push(status.toUpperCase());
   }
   if (search) {
-    conditions.push(`c.name ILIKE $${paramIdx++}`);
-    params.push(`%${search}%`);
+    conditions.push(`c.name ILIKE $${whereIdx++}`);
+    whereParams.push(`%${search}%`);
   }
   if (metaAccountId) {
-    conditions.push(`ma.id = $${paramIdx++}`);
-    params.push(metaAccountId);
+    conditions.push(`ma.id = $${whereIdx++}`);
+    whereParams.push(metaAccountId);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  // Total count
+  // Total count (no date filter — counts campaigns, not metrics rows)
   const countResult = await query(
     `SELECT COUNT(*) AS total
      FROM campaigns c
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
      ${whereClause}`,
-    params
+    whereParams
   );
 
   const total = parseInt(countResult.rows[0].total, 10);
 
-  // Paginated results with latest spend/metrics
+  // Date filter for LEFT JOIN on campaign_metrics (so totals reflect selected period)
+  const dataParams = [...whereParams];
+  let dataIdx = whereIdx;
+  const joinDateParts = [];
+  if (dateFrom) {
+    joinDateParts.push(`AND cm.date_start >= $${dataIdx++}`);
+    dataParams.push(dateFrom);
+  }
+  if (dateTo) {
+    joinDateParts.push(`AND cm.date_stop <= $${dataIdx++}`);
+    dataParams.push(dateTo);
+  }
+  const joinDateClause = joinDateParts.join(' ');
+
+  // Paginated results with spend/metrics filtered by date range
   const { rows: campaigns } = await query(
     `SELECT
        c.id,
@@ -77,12 +91,12 @@ async function getCampaigns(clientId, filters = {}) {
        COALESCE(SUM(cm.conversions), 0) AS total_conversions
      FROM campaigns c
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
-     LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
+     LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id ${joinDateClause}
      ${whereClause}
      GROUP BY c.id, ma.business_name, ma.ad_account_id, ma.currency
      ORDER BY c.created_at DESC
-     LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
-    [...params, limit, offset]
+     LIMIT $${dataIdx++} OFFSET $${dataIdx++}`,
+    [...dataParams, limit, offset]
   );
 
   const data = campaigns.map((c) => ({

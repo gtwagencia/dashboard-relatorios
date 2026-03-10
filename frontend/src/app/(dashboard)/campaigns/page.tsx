@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
 import { subDays, format } from 'date-fns';
 import { campaignsApi, reportsApi, metaApi } from '@/lib/api';
 import {
   formatCurrency,
-  formatPercent,
   formatDate,
   getObjectiveLabel,
   getObjectiveColor,
@@ -23,11 +22,11 @@ import toast from 'react-hot-toast';
 
 const OBJECTIVES = [
   { value: '', label: 'Todos os objetivos' },
-  { value: 'OUTCOME_LEADS', label: 'Leads' },
-  { value: 'OUTCOME_SALES', label: 'Vendas' },
-  { value: 'OUTCOME_ENGAGEMENT', label: 'Engajamento' },
-  { value: 'OUTCOME_AWARENESS', label: 'Alcance' },
-  { value: 'OUTCOME_TRAFFIC', label: 'Tráfego' },
+  { value: 'leads', label: 'Leads' },
+  { value: 'sales', label: 'Vendas' },
+  { value: 'engagement', label: 'Engajamento' },
+  { value: 'awareness', label: 'Alcance' },
+  { value: 'traffic', label: 'Tráfego' },
 ];
 
 const STATUSES = [
@@ -47,6 +46,17 @@ export default function CampaignsPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
   const [exporting, setExporting] = useState(false);
 
+  // Compute dateFrom/dateTo from the selected range
+  const { dateFrom, dateTo } = useMemo(() => {
+    const to = new Date();
+    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
+    const from = subDays(to, days);
+    return {
+      dateFrom: format(from, 'yyyy-MM-dd'),
+      dateTo: format(to, 'yyyy-MM-dd'),
+    };
+  }, [dateRange]);
+
   const { data: accountsData } = useSWR<MetaAccount[]>(
     'meta-accounts-campaigns',
     () => metaApi.list().then((r) => r.data.accounts)
@@ -54,7 +64,7 @@ export default function CampaignsPage() {
   const accounts = accountsData ?? [];
 
   const { data, isLoading, mutate } = useSWR<PaginatedResponse<Campaign>>(
-    ['campaigns', objective, status, search, page, selectedAccountId],
+    ['campaigns', objective, status, search, page, selectedAccountId, dateFrom, dateTo],
     () =>
       campaignsApi
         .list({
@@ -64,6 +74,8 @@ export default function CampaignsPage() {
           page,
           limit: 15,
           metaAccountId: selectedAccountId || undefined,
+          dateFrom,
+          dateTo,
         })
         .then((r) => r.data),
     { keepPreviousData: true }
@@ -79,13 +91,10 @@ export default function CampaignsPage() {
   async function handleExport() {
     setExporting(true);
     try {
-      const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
-      const to = new Date();
-      const from = subDays(to, days);
       await reportsApi.trigger({
         type: 'custom',
-        periodStart: format(from, 'yyyy-MM-dd'),
-        periodEnd: format(to, 'yyyy-MM-dd'),
+        periodStart: dateFrom,
+        periodEnd: dateTo,
       });
       toast.success('Relatório gerado com sucesso! Verifique a aba Relatórios.');
     } catch {
@@ -197,9 +206,9 @@ export default function CampaignsPage() {
                   <th className="table-header pl-5">Nome</th>
                   <th className="table-header">Objetivo</th>
                   <th className="table-header">Status</th>
-                  <th className="table-header text-right">Orçamento</th>
-                  <th className="table-header text-right">CTR</th>
-                  <th className="table-header text-right">CPC</th>
+                  <th className="table-header text-right">Investimento</th>
+                  <th className="table-header text-right">Leads</th>
+                  <th className="table-header text-right">Cliques</th>
                   <th className="table-header text-right pr-5">Início</th>
                 </tr>
               </thead>
@@ -247,15 +256,19 @@ export default function CampaignsPage() {
                           {getStatusLabel(campaign.status)}
                         </Badge>
                       </td>
-                      <td className="table-cell text-right">
-                        {campaign.dailyBudget
-                          ? `${formatCurrency(campaign.dailyBudget)}/dia`
-                          : campaign.lifetimeBudget
-                          ? formatCurrency(campaign.lifetimeBudget)
+                      <td className="table-cell text-right font-medium text-gray-800">
+                        {(campaign as any).totalSpend != null
+                          ? formatCurrency((campaign as any).totalSpend)
                           : '-'}
                       </td>
-                      <td className="table-cell text-right">-</td>
-                      <td className="table-cell text-right">-</td>
+                      <td className="table-cell text-right">
+                        {(campaign as any).totalLeads ?? '-'}
+                      </td>
+                      <td className="table-cell text-right">
+                        {(campaign as any).totalClicks != null
+                          ? Number((campaign as any).totalClicks).toLocaleString('pt-BR')
+                          : '-'}
+                      </td>
                       <td className="table-cell text-right pr-5 text-gray-500">
                         {campaign.startTime ? formatDate(campaign.startTime) : '-'}
                       </td>

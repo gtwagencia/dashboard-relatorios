@@ -11,6 +11,7 @@ import {
   WebhookConfig,
   MetaAccount,
   PaginatedResponse,
+  SystemSetting,
 } from '@/types';
 
 const api: AxiosInstance = axios.create({
@@ -57,6 +58,9 @@ export const authApi = {
 
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
+
+  updateProfile: (data: { name?: string; email?: string }) =>
+    api.put<{ accessToken: string; client: { id: string; name: string; email: string; role: string } }>('/auth/profile', data),
 };
 
 // Metrics API
@@ -91,6 +95,8 @@ export const campaignsApi = {
     page?: number;
     limit?: number;
     metaAccountId?: string;
+    dateFrom?: string;
+    dateTo?: string;
   }) => api.get<PaginatedResponse<Campaign>>('/campaigns', { params }),
 
   get: (id: string) => api.get<{ campaign: Campaign }>(`/campaigns/${id}`),
@@ -165,6 +171,12 @@ export const adminApi = {
     api.put(`/admin/clients/${id}`, data),
   toggleStatus: (id: string) => api.patch(`/admin/clients/${id}/toggle`),
   getClientMetaAccounts: (id: string) => api.get(`/admin/clients/${id}/meta-accounts`),
+};
+
+// System Settings API (admin only)
+export const settingsApi = {
+  getAll: () => api.get<{ settings: Record<string, string> }>('/settings'),
+  update: (data: Record<string, string>) => api.put<{ settings: Record<string, string> }>('/settings', data),
 };
 
 export default api;

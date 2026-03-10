@@ -2,6 +2,7 @@
 
 const axios = require('axios');
 const logger = require('../../utils/logger');
+const { getSetting } = require('../settings/settings.service');
 
 const META_API_VERSION = 'v19.0';
 const BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
@@ -48,6 +49,7 @@ const INSIGHT_FIELDS = [
   'cpm',
   'frequency',
   'actions',
+  'action_values',
   'cost_per_action_type',
   'video_p100_watched_actions',
   'date_start',
@@ -62,12 +64,13 @@ const api = axios.create({
 });
 
 /**
- * Returns the global Meta access token from environment variables.
- * @returns {string}
+ * Returns the global Meta access token.
+ * Checks the DB first (admin panel), then falls back to environment variable.
+ * @returns {Promise<string>}
  */
-function getGlobalToken() {
-  const token = process.env.META_ACCESS_TOKEN;
-  if (!token) throw new Error('META_ACCESS_TOKEN não configurado no ambiente');
+async function getGlobalToken() {
+  const token = await getSetting('META_ACCESS_TOKEN');
+  if (!token) throw new Error('META_ACCESS_TOKEN não configurado. Configure em Configurações → Sistema.');
   return token;
 }
 
@@ -126,7 +129,7 @@ function sleep(ms) {
 async function getAdAccounts() {
   const response = await api.get('/me/adaccounts', {
     params: {
-      access_token: getGlobalToken(),
+      access_token: await getGlobalToken(),
       fields: 'id,name,account_id,currency,timezone_name,business',
       limit: 100,
     },
@@ -154,7 +157,7 @@ async function getCampaigns(adAccountId) {
   while (hasMore) {
     const response = await api.get(url, {
       params: {
-        access_token: getGlobalToken(),
+        access_token: await getGlobalToken(),
         fields:
           'id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time,configured_status',
         limit: 200,
@@ -195,7 +198,7 @@ async function getCampaigns(adAccountId) {
 async function getCampaignInsights(campaignId, datePreset = 'last_30d') {
   const response = await api.get(`/${campaignId}/insights`, {
     params: {
-      access_token: getGlobalToken(),
+      access_token: await getGlobalToken(),
       fields: INSIGHT_FIELDS,
       date_preset: datePreset,
       time_increment: 1, // daily breakdown
@@ -224,7 +227,7 @@ async function getAccountInsights(adAccountId, dateFrom, dateTo) {
 
   const response = await api.get(`/${accountId}/insights`, {
     params: {
-      access_token: getGlobalToken(),
+      access_token: await getGlobalToken(),
       fields: INSIGHT_FIELDS,
       time_range: JSON.stringify({ since: dateFrom, until: dateTo }),
       time_increment: 1,
@@ -255,11 +258,31 @@ function extractActionValue(actions, actionType) {
  */
 function normaliseInsight(insight) {
   const actions = insight.actions || [];
+  const actionValues = insight.action_values || [];
   const costPerAction = insight.cost_per_action_type || [];
 
-  const leads = extractActionValue(actions, 'lead') || extractActionValue(actions, 'onsite_conversion.lead_grouped');
+  // Count all lead-type actions: form leads, WhatsApp, DMs, messaging, link clicks to wa/ig
+  const leadActions = [
+    'lead',
+    'onsite_conversion.lead_grouped',
+    'onsite_conversion.messaging_first_reply',         // WhatsApp/Messenger first reply
+    'onsite_conversion.messaging_conversation_started_7d', // conversations started
+    'onsite_conversion.messaging_welcome_message_view', // WhatsApp welcome views
+    'onsite_conversion.total_messaging_connection',     // total messaging connections
+    'contact',                                          // contact button clicks
+    'offsite_conversion.fb_pixel_lead',                 // pixel lead events
+    'omni_initiated_checkout',                          // checkout initiations (sales funnel)
+  ];
+  const leads = leadActions.reduce((sum, type) => sum + extractActionValue(actions, type), 0)
+    || extractActionValue(actions, 'onsite_conversion.lead_grouped');
   const conversions = extractActionValue(actions, 'offsite_conversion.fb_pixel_purchase') +
-    extractActionValue(actions, 'offsite_conversion.fb_pixel_lead');
+    extractActionValue(actions, 'purchase');
+
+  // Revenue from purchases (Meta action_values field)
+  const conversionsValue =
+    extractActionValue(actionValues, 'offsite_conversion.fb_pixel_purchase') +
+    extractActionValue(actionValues, 'purchase') +
+    extractActionValue(actionValues, 'omni_purchase');
 
   const costPerLead =
     leads > 0
@@ -286,6 +309,7 @@ function normaliseInsight(insight) {
     leads: Math.round(leads),
     cost_per_lead: Math.round(costPerLead * 10000) / 10000,
     cost_per_result: Math.round(costPerResult * 10000) / 10000,
+    conversions_value: Math.round(conversionsValue * 100) / 100,
     video_views: extractActionValue(insight.video_p100_watched_actions, 'video_view'),
     raw_json: insight,
   };

@@ -59,6 +59,7 @@ async function getSummary(clientId, dateFrom, dateTo, metaAccountId) {
        COALESCE(SUM(cm.reach), 0)::BIGINT                AS total_reach,
        COALESCE(SUM(cm.leads), 0)::INT                   AS total_leads,
        COALESCE(SUM(cm.conversions), 0)::INT             AS total_conversions,
+       COALESCE(SUM(cm.conversions_value), 0)::NUMERIC(14,2) AS total_conversions_value,
        COALESCE(SUM(cm.video_views), 0)::INT             AS total_video_views,
        CASE WHEN SUM(cm.impressions) > 0
             THEN (SUM(cm.clicks)::NUMERIC / SUM(cm.impressions) * 100)::NUMERIC(8,4)
@@ -90,6 +91,7 @@ async function getSummary(clientId, dateFrom, dateTo, metaAccountId) {
     totalReach: Number(r.total_reach),
     totalLeads: Number(r.total_leads),
     totalConversions: Number(r.total_conversions),
+    totalConversionsValue: Number(r.total_conversions_value),
     avgCtr: Number(r.avg_ctr),
     avgCpm: Number(r.avg_cpm),
     avgCpc: Number(r.avg_cpc),
@@ -171,6 +173,7 @@ async function getTimeseries(clientId, dateFrom, dateTo, campaignId, metaAccount
        COALESCE(SUM(cm.clicks), 0)::BIGINT               AS clicks,
        COALESCE(SUM(cm.leads), 0)::INT                   AS leads,
        COALESCE(SUM(cm.conversions), 0)::INT             AS conversions,
+       COALESCE(SUM(cm.conversions_value), 0)::NUMERIC(14,2) AS conversions_value,
        CASE WHEN SUM(cm.impressions) > 0
             THEN (SUM(cm.clicks)::NUMERIC / SUM(cm.impressions) * 100)::NUMERIC(8,4)
             ELSE 0 END                                   AS ctr,
@@ -189,7 +192,19 @@ async function getTimeseries(clientId, dateFrom, dateTo, campaignId, metaAccount
     params
   );
 
-  return rows;
+  return rows.map((r) => ({
+    date: r.date,
+    spend: Number(r.spend),
+    impressions: Number(r.impressions),
+    reach: Number(r.reach),
+    clicks: Number(r.clicks),
+    leads: Number(r.leads),
+    conversions: Number(r.conversions),
+    conversionsValue: Number(r.conversions_value),
+    ctr: Number(r.ctr),
+    cpm: Number(r.cpm),
+    cpc: Number(r.cpc),
+  }));
 }
 
 module.exports = { getSummary, getByObjective, getTimeseries };

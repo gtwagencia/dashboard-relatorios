@@ -50,26 +50,35 @@ async function getClient() {
 }
 
 /**
- * Read and execute the migration SQL file to ensure all tables exist.
+ * Read and execute all migration SQL files in sorted order.
+ * All migrations use IF NOT EXISTS so they are safe to re-run.
  */
 async function initDatabase() {
   logger.info('Running database migrations...');
-  const migrationFile = path.join(__dirname, '../db/migrations/001_init.sql');
+  const migrationsDir = path.join(__dirname, '../db/migrations');
 
-  if (!fs.existsSync(migrationFile)) {
-    logger.warn('Migration file not found, skipping: ' + migrationFile);
+  if (!fs.existsSync(migrationsDir)) {
+    logger.warn('Migrations directory not found, skipping');
     return;
   }
 
-  const sql = fs.readFileSync(migrationFile, 'utf8');
+  const files = fs.readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
 
-  try {
-    await pool.query(sql);
-    logger.info('Database migrations completed successfully');
-  } catch (err) {
-    logger.error('Migration error', { error: err.message });
-    throw err;
+  for (const file of files) {
+    const filePath = path.join(migrationsDir, file);
+    const sql = fs.readFileSync(filePath, 'utf8');
+    try {
+      await pool.query(sql);
+      logger.info(`Migration applied: ${file}`);
+    } catch (err) {
+      logger.error(`Migration error in ${file}`, { error: err.message });
+      throw err;
+    }
   }
+
+  logger.info('Database migrations completed successfully');
 }
 
 module.exports = { pool, query, getClient, initDatabase };

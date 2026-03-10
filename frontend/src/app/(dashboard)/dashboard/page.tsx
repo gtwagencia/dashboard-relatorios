@@ -14,7 +14,7 @@ import {
 import TopBar, { DateRangeValue } from '@/components/layout/TopBar';
 import KpiCard from '@/components/dashboard/KpiCard';
 import Card from '@/components/ui/Card';
-import SpendLineChart from '@/components/charts/SpendLineChart';
+import MainTimeseriesChart from '@/components/charts/MainTimeseriesChart';
 import ObjectivePieChart from '@/components/charts/ObjectivePieChart';
 import MetricsBarChart from '@/components/charts/MetricsBarChart';
 import { MetaAccount, MetricsSummary, ObjectiveMetrics, TimeseriesPoint } from '@/types';
@@ -80,8 +80,8 @@ export default function DashboardPage() {
     setRefreshing(false);
   }, [mutateSummary, mutateObjective, mutateTimeseries]);
 
-  const spendData =
-    timeseries?.map((t) => ({ date: t.date, spend: t.spend })) ?? [];
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const currency = selectedAccount?.currency || 'BRL';
 
   const pieData = (byObjective ?? []).map((o) => ({
     objective: o.objectiveType || o.objective,
@@ -202,12 +202,12 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Spend Line Chart */}
-        <Card title="Investimento ao Longo do Tempo">
+        {/* Main Timeseries Chart */}
+        <Card title="Evolução das Métricas" subtitle="Investimento, leads e receita de vendas por dia">
           {loadingTimeseries ? (
-            <div className="h-60 bg-gray-50 rounded-lg animate-pulse" />
+            <div className="h-72 bg-gray-50 rounded-lg animate-pulse" />
           ) : (
-            <SpendLineChart data={spendData} />
+            <MainTimeseriesChart data={timeseries ?? []} currency={currency} />
           )}
         </Card>
 

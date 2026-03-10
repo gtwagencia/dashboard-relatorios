@@ -54,24 +54,25 @@ async function upsertMetrics(internalCampaignId, metrics) {
     `INSERT INTO campaign_metrics
        (campaign_id, date_start, date_stop, impressions, reach, clicks, spend,
         ctr, cpc, cpm, conversions, leads, cost_per_lead, cost_per_result,
-        frequency, video_views, raw_json)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        frequency, video_views, conversions_value, raw_json)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
      ON CONFLICT (campaign_id, date_start) DO UPDATE SET
-       date_stop       = EXCLUDED.date_stop,
-       impressions     = EXCLUDED.impressions,
-       reach           = EXCLUDED.reach,
-       clicks          = EXCLUDED.clicks,
-       spend           = EXCLUDED.spend,
-       ctr             = EXCLUDED.ctr,
-       cpc             = EXCLUDED.cpc,
-       cpm             = EXCLUDED.cpm,
-       conversions     = EXCLUDED.conversions,
-       leads           = EXCLUDED.leads,
-       cost_per_lead   = EXCLUDED.cost_per_lead,
-       cost_per_result = EXCLUDED.cost_per_result,
-       frequency       = EXCLUDED.frequency,
-       video_views     = EXCLUDED.video_views,
-       raw_json        = EXCLUDED.raw_json`,
+       date_stop          = EXCLUDED.date_stop,
+       impressions        = EXCLUDED.impressions,
+       reach              = EXCLUDED.reach,
+       clicks             = EXCLUDED.clicks,
+       spend              = EXCLUDED.spend,
+       ctr                = EXCLUDED.ctr,
+       cpc                = EXCLUDED.cpc,
+       cpm                = EXCLUDED.cpm,
+       conversions        = EXCLUDED.conversions,
+       leads              = EXCLUDED.leads,
+       cost_per_lead      = EXCLUDED.cost_per_lead,
+       cost_per_result    = EXCLUDED.cost_per_result,
+       frequency          = EXCLUDED.frequency,
+       video_views        = EXCLUDED.video_views,
+       conversions_value  = EXCLUDED.conversions_value,
+       raw_json           = EXCLUDED.raw_json`,
     [
       internalCampaignId,
       metrics.date_start,
@@ -89,6 +90,7 @@ async function upsertMetrics(internalCampaignId, metrics) {
       metrics.cost_per_result,
       metrics.frequency,
       metrics.video_views,
+      metrics.conversions_value || 0,
       JSON.stringify(metrics.raw_json),
     ]
   );

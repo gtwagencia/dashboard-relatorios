@@ -18,9 +18,9 @@ router.get('/', async (req, res, next) => {
   try {
     // Admins see all campaigns; clients see only their own
     const clientId = req.user.role === 'admin' ? null : req.user.clientId;
-    const { objective, status, search, page, limit, metaAccountId } = req.query;
+    const { objective, status, search, page, limit, metaAccountId, dateFrom, dateTo } = req.query;
 
-    const result = await campaignsService.getCampaigns(clientId, { objective, status, search, page, limit, metaAccountId });
+    const result = await campaignsService.getCampaigns(clientId, { objective, status, search, page, limit, metaAccountId, dateFrom, dateTo });
 
     return res.status(200).json(result);
   } catch (err) {

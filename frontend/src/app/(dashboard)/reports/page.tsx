@@ -232,6 +232,7 @@ export default function ReportsPage() {
                   <th className="table-header">Objetivo</th>
                   <th className="table-header">Período</th>
                   <th className="table-header">Status</th>
+                  <th className="table-header">Destino</th>
                   <th className="table-header">Criado em</th>
                   <th className="table-header pr-5">Enviado em</th>
                 </tr>
@@ -240,7 +241,7 @@ export default function ReportsPage() {
                 {isLoading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: 7 }).map((_, j) => (
                         <td key={j} className="table-cell">
                           <div className="h-3 bg-gray-100 rounded animate-pulse" />
                         </td>
@@ -249,7 +250,7 @@ export default function ReportsPage() {
                   ))
                 ) : reports.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-400">
+                    <td colSpan={7} className="py-12 text-center text-gray-400">
                       Nenhum relatório gerado ainda
                     </td>
                   </tr>
@@ -271,6 +272,20 @@ export default function ReportsPage() {
                         <Badge variant={getReportStatusVariant(report.status)}>
                           {getReportStatusLabel(report.status)}
                         </Badge>
+                        {report.errorMsg && (
+                          <p className="text-xs text-red-500 mt-0.5 max-w-[140px] truncate" title={report.errorMsg}>
+                            {report.errorMsg}
+                          </p>
+                        )}
+                      </td>
+                      <td className="table-cell text-gray-500 max-w-[160px]">
+                        {report.webhookUrl ? (
+                          <span className="text-xs truncate block" title={report.webhookUrl}>
+                            {report.webhookUrl.replace(/^https?:\/\//, '')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="table-cell text-gray-500">
                         {report.createdAt ? formatDateTime(report.createdAt) : '-'}
