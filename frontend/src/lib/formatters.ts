@@ -29,9 +29,14 @@ export function formatNumber(value: number): string {
 // Parsing as local avoids the issue entirely.
 function parseDateLocal(date: string | Date): Date {
   if (typeof date !== 'string') return date;
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(date);
-  if (dateOnly) {
+  // Pure date string "YYYY-MM-DD" → parse as local midnight (avoids UTC-offset day shift)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const [year, month, day] = date.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  // ISO timestamp "YYYY-MM-DDTHH:..." → extract date part and parse as local midnight
+  if (/^\d{4}-\d{2}-\d{2}T/.test(date)) {
+    const [year, month, day] = date.split('T')[0].split('-').map(Number);
     return new Date(year, month - 1, day);
   }
   return parseISO(date);

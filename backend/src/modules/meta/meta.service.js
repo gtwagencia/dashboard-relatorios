@@ -307,14 +307,20 @@ function normaliseInsight(insight) {
       actionTypes: actions.map((a) => `${a.action_type}:${a.value}`),
     });
   }
-  const conversions = extractActionValue(actions, 'offsite_conversion.fb_pixel_purchase') +
+  // Purchase count — use priority chain (||) to avoid double-counting overlapping action types.
+  // omni_purchase is Meta's unified cross-channel purchase (preferred).
+  // offsite_conversion.fb_pixel_purchase and purchase are aliases for the same pixel event —
+  // summing them would double-count (e.g. 10 + 10 = 20 instead of 10).
+  const conversions =
+    extractActionValue(actions, 'omni_purchase') ||
+    extractActionValue(actions, 'offsite_conversion.fb_pixel_purchase') ||
     extractActionValue(actions, 'purchase');
 
-  // Revenue from purchases (Meta action_values field)
+  // Revenue from purchases — same priority logic applied to action_values
   const conversionsValue =
-    extractActionValue(actionValues, 'offsite_conversion.fb_pixel_purchase') +
-    extractActionValue(actionValues, 'purchase') +
-    extractActionValue(actionValues, 'omni_purchase');
+    extractActionValue(actionValues, 'omni_purchase') ||
+    extractActionValue(actionValues, 'offsite_conversion.fb_pixel_purchase') ||
+    extractActionValue(actionValues, 'purchase');
 
   const costPerLead =
     leads > 0

@@ -37,15 +37,21 @@ function CustomTooltip({
   currency = 'BRL',
 }: {
   active?: boolean;
-  payload?: Array<{ value: number; name: string; color: string }>;
+  payload?: Array<{ value: number; name: string; color: string; payload: Record<string, number> }>;
   label?: string;
   currency?: string;
 }) {
   if (!active || !payload?.length) return null;
 
+  // Access the raw data point to compute derived metrics regardless of visible series
+  const rawPoint = payload[0]?.payload;
+  const dailySpend = rawPoint?.spend ?? 0;
+  const dailyConversions = rawPoint?.conversions ?? 0;
+  const costPerSale = dailyConversions > 0 ? dailySpend / dailyConversions : null;
+
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 shadow-xl text-xs min-w-[160px]">
-      <p className="text-gray-400 mb-2 font-medium">{label ? formatDate(label) : ''}</p>
+      <p className="text-gray-400 mb-2 font-medium">{label || ''}</p>
       {payload.map((entry, i) => {
         const isMonetary = entry.name === 'spend' || entry.name === 'conversionsValue';
         const cfg = SERIES_CONFIG[entry.name as SeriesKey];
@@ -63,6 +69,15 @@ function CustomTooltip({
           </div>
         );
       })}
+      {costPerSale !== null && (
+        <>
+          <div className="border-t border-gray-700 my-1.5" />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-gray-400">Custo por Venda:</span>
+            <span className="text-white font-semibold">{formatCurrency(costPerSale, currency)}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
