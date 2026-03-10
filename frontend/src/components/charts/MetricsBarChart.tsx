@@ -10,6 +10,8 @@ import {
   Tooltip,
   Cell,
 } from 'recharts';
+import type { TooltipProps } from 'recharts';
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { formatNumber } from '@/lib/formatters';
 
 interface MetricsBarChartData {
@@ -34,12 +36,7 @@ function CustomTooltip({
   payload,
   label,
   metric,
-}: {
-  active?: boolean;
-  payload?: Array<{ value: number }>;
-  label?: string;
-  metric: string;
-}) {
+}: TooltipProps<ValueType, NameType> & { metric: string }) {
   if (!active || !payload?.length) return null;
 
   return (
@@ -47,7 +44,7 @@ function CustomTooltip({
       <p className="text-gray-400 mb-1 truncate">{label}</p>
       <p className="text-white font-medium">
         {metricConfig[metric as keyof typeof metricConfig]?.label}:{' '}
-        <span className="text-blue-400">{formatNumber(payload[0].value)}</span>
+        <span className="text-blue-400">{formatNumber(Number(payload[0].value ?? 0))}</span>
       </p>
     </div>
   );
