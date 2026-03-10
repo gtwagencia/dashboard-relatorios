@@ -2,16 +2,11 @@ version: '3.9'
 
 # =============================================================
 # Meta Ads Dashboard — Docker Swarm Stack
-# Rede pública compartilhada: network_public (Traefik overlay)
-# =============================================================
+# Imagens buildadas automaticamente via GitHub Actions e
+# hospedadas no Docker Hub.
 #
-# PRÉ-REQUISITO: buildar as imagens no servidor antes de subir a stack.
-# Execute no servidor (via SSH):
-#   cd /caminho/do/projeto
-#   docker build -t metaads-backend:latest ./backend
-#   docker build -t metaads-frontend:latest ./frontend
-#
-# Depois suba a stack pelo Portainer (Stacks → Add Stack → Upload).
+# Variável obrigatória no Portainer:
+#   DOCKERHUB_USERNAME = seu usuário do Docker Hub
 # =============================================================
 
 networks:
@@ -21,7 +16,7 @@ networks:
 services:
 
   metaads-backend:
-    image: metaads-backend:latest
+    image: ${DOCKERHUB_USERNAME}/metaads-backend:latest
     environment:
       NODE_ENV: production
       PORT: "3001"
@@ -47,17 +42,16 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
-        # Rota: dashboard.gtw.digital/api → backend:3001
         - "traefik.http.routers.metaads-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
         - "traefik.http.routers.metaads-api.entrypoints=websecure"
         - "traefik.http.routers.metaads-api.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.metaads-api.priority=10"
         - "traefik.http.services.metaads-api.loadbalancer.server.port=3001"
 
   metaads-frontend:
-    image: metaads-frontend:latest
+    image: ${DOCKERHUB_USERNAME}/metaads-frontend:latest
     environment:
       NODE_ENV: production
-      # O frontend chama /api que o Traefik roteia para o backend
       NEXT_PUBLIC_API_URL: "https://${DOMAIN}/api"
     networks:
       - network_public
@@ -70,11 +64,8 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
-        # Rota: dashboard.gtw.digital → frontend:3000
         - "traefik.http.routers.metaads-frontend.rule=Host(`${DOMAIN}`)"
         - "traefik.http.routers.metaads-frontend.entrypoints=websecure"
         - "traefik.http.routers.metaads-frontend.tls.certresolver=letsencrypt"
-        - "traefik.http.services.metaads-frontend.loadbalancer.server.port=3000"
-        # Prioridade menor que a rota do /api (para não capturar /api)
         - "traefik.http.routers.metaads-frontend.priority=1"
-        - "traefik.http.routers.metaads-api.priority=10"
+        - "traefik.http.services.metaads-frontend.loadbalancer.server.port=3000"
