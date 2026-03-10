@@ -175,4 +175,35 @@ async function logout(token) {
   logger.info('Refresh token revoked', { tokenHash: tokenHash.slice(0, 8) + '...' });
 }
 
-module.exports = { login, refresh, logout };
+/**
+ * Change password for the authenticated client.
+ * @param {string} clientId
+ * @param {string} currentPassword
+ * @param {string} newPassword
+ * @returns {Promise<void>}
+ */
+async function changePassword(clientId, currentPassword, newPassword) {
+  const { rows } = await query(
+    'SELECT id, password_hash FROM clients WHERE id = $1',
+    [clientId]
+  );
+  if (rows.length === 0) {
+    const err = new Error('Client not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const valid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+  if (!valid) {
+    const err = new Error('Senha atual incorreta');
+    err.statusCode = 401;
+    throw err;
+  }
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await query(
+    `UPDATE clients SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+    [passwordHash, clientId]
+  );
+  logger.info('Password changed', { clientId });
+}
+
+module.exports = { login, refresh, logout, changePassword };

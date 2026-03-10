@@ -74,4 +74,24 @@ router.get('/me', authenticate, (req, res) => {
   return res.status(200).json({ user: req.user });
 });
 
+/**
+ * POST /api/auth/change-password
+ * Body: { currentPassword, newPassword }
+ */
+router.post('/change-password', authenticate, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword e newPassword são obrigatórios', code: 400 });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'A nova senha deve ter pelo menos 8 caracteres', code: 400 });
+    }
+    await authService.changePassword(req.user.clientId, currentPassword, newPassword);
+    return res.status(200).json({ message: 'Senha alterada com sucesso' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

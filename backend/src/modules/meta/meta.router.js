@@ -29,7 +29,18 @@ router.get('/', async (req, res, next) => {
       [clientId]
     );
 
-    return res.status(200).json({ accounts: rows });
+    const accounts = rows.map((r) => ({
+      id: r.id,
+      clientId: r.client_id,
+      adAccountId: r.ad_account_id,
+      businessName: r.business_name,
+      currency: r.currency,
+      timezone: r.timezone,
+      syncedAt: r.synced_at,
+      createdAt: r.created_at,
+    }));
+
+    return res.status(200).json({ accounts });
   } catch (err) {
     next(err);
   }
@@ -74,7 +85,16 @@ router.post('/', requireAdmin, async (req, res, next) => {
       [id, clientId, adAccountId, businessName || '', currency, timezone]
     );
 
-    const account = rows[0];
+    const r = rows[0];
+    const account = {
+      id: r.id,
+      clientId: r.client_id,
+      adAccountId: r.ad_account_id,
+      businessName: r.business_name,
+      currency: r.currency,
+      timezone: r.timezone,
+      createdAt: r.created_at,
+    };
     logger.info('Meta account added', { clientId, metaAccountId: id, adAccountId });
 
     // Trigger async sync (do not await)

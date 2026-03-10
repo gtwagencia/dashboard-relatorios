@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
-import { metaApi, adminApi, webhooksApi } from '@/lib/api';
+import { metaApi, adminApi, webhooksApi, authApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/formatters';
 import { getUser } from '@/lib/auth';
 import TopBar from '@/components/layout/TopBar';
@@ -13,7 +13,7 @@ import { MetaAccount, WebhookConfig } from '@/types';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
-type SettingsTab = 'meta' | 'webhooks' | 'reports';
+type SettingsTab = 'meta' | 'webhooks' | 'reports' | 'profile' | 'clients';
 
 // ============================================================
 // Meta Accounts Tab
@@ -609,13 +609,304 @@ function AutoReportsTab() {
 }
 
 // ============================================================
+// Profile Tab (change password)
+// ============================================================
+
+function ProfileTab() {
+  const user = getUser();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleChangePassword() {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('Preencha todos os campos.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('A nova senha e a confirmação não coincidem.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('A nova senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      toast.success('Senha alterada com sucesso!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Erro ao alterar senha.';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card title="Meu Perfil" subtitle="Informações da sua conta">
+        <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
+          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-lg font-bold shrink-0">
+            {user?.name?.charAt(0).toUpperCase() || '?'}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">{user?.name}</p>
+            <p className="text-xs text-gray-500">{user?.email}</p>
+            <span className={clsx(
+              'inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium',
+              user?.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+            )}>
+              {user?.role === 'admin' ? 'Administrador' : 'Cliente'}
+            </span>
+          </div>
+        </div>
+
+        <h4 className="text-sm font-semibold text-gray-700 mb-4">Alterar Senha</h4>
+        <div className="space-y-3 max-w-sm">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Senha Atual *</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="••••••••"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nova Senha *</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Mínimo 8 caracteres"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Confirmar Nova Senha *</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Repita a nova senha"
+            />
+          </div>
+          <div className="pt-1">
+            <Button variant="primary" size="sm" loading={saving} onClick={handleChangePassword}>
+              Salvar Nova Senha
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Clients Tab (admin only)
+// ============================================================
+
+function ClientsTab() {
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('client');
+  const [adding, setAdding] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const { data: clientsData, isLoading, mutate } = useSWR(
+    'admin-clients-tab',
+    () => adminApi.listClients().then((r) => r.data.clients)
+  );
+  const clients = clientsData || [];
+
+  async function handleCreate() {
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      toast.error('Nome, e-mail e senha são obrigatórios.');
+      return;
+    }
+    setAdding(true);
+    try {
+      await adminApi.createClient({ name: name.trim(), email: email.trim(), password, role });
+      await mutate();
+      setName(''); setEmail(''); setPassword(''); setRole('client');
+      setShowForm(false);
+      toast.success('Usuário criado com sucesso!');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Erro ao criar usuário.';
+      toast.error(msg);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleToggle(id: string) {
+    setTogglingId(id);
+    try {
+      await adminApi.toggleStatus(id);
+      await mutate();
+    } catch {
+      toast.error('Erro ao atualizar status.');
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Gerenciar Usuários"
+        subtitle="Crie e gerencie clientes e administradores"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowForm((v) => !v)}
+            icon={
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            }
+          >
+            Novo Usuário
+          </Button>
+        }
+      >
+        {showForm && (
+          <div className="mb-5 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
+            <h4 className="text-sm font-semibold text-blue-800">Novo Usuário</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nome *</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nome completo"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">E-mail *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="usuario@email.com"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Senha *</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Papel</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="client">Cliente</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="primary" size="sm" loading={adding} onClick={handleCreate}>
+                Criar Usuário
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} disabled={adding}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-14 bg-gray-50 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="py-10 text-center text-gray-400 text-sm">
+            Nenhum usuário encontrado.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {clients.map((c: any) => (
+              <div
+                key={c.id}
+                className={clsx(
+                  'flex items-center justify-between p-3 border rounded-xl transition-all',
+                  c.isActive || c.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-bold shrink-0">
+                    {(c.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                    <p className="text-xs text-gray-500">{c.email}</p>
+                  </div>
+                  <span className={clsx(
+                    'ml-2 px-2 py-0.5 rounded-full text-xs font-medium',
+                    c.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                  )}>
+                    {c.role === 'admin' ? 'Admin' : 'Cliente'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleToggle(c.id)}
+                  disabled={togglingId === c.id}
+                  className={clsx(
+                    'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
+                    (c.isActive || c.is_active) ? 'bg-green-500' : 'bg-gray-300'
+                  )}
+                  title={(c.isActive || c.is_active) ? 'Desativar' : 'Ativar'}
+                >
+                  <span
+                    className={clsx(
+                      'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                      (c.isActive || c.is_active) ? 'translate-x-4' : 'translate-x-0.5'
+                    )}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Settings Page
 // ============================================================
 
 export default function SettingsPage() {
+  const user = getUser();
+  const isAdmin = user?.role === 'admin';
   const [activeTab, setActiveTab] = useState<SettingsTab>('meta');
 
-  const tabs: { key: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  const tabs: { key: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
     {
       key: 'meta',
       label: 'Contas Meta',
@@ -643,7 +934,28 @@ export default function SettingsPage() {
         </svg>
       ),
     },
+    {
+      key: 'clients',
+      label: 'Usuários',
+      adminOnly: true,
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'profile',
+      label: 'Meu Perfil',
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      ),
+    },
   ];
+
+  const visibleTabs = tabs.filter((t) => !t.adminOnly || isAdmin);
 
   return (
     <div className="flex flex-col min-h-full">
@@ -651,8 +963,8 @@ export default function SettingsPage() {
 
       <div className="flex-1 p-6 space-y-5">
         {/* Tab Bar */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 self-start w-fit">
-          {tabs.map((tab) => (
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 self-start w-fit flex-wrap">
+          {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -673,6 +985,8 @@ export default function SettingsPage() {
         {activeTab === 'meta' && <MetaAccountsTab />}
         {activeTab === 'webhooks' && <WebhooksTab />}
         {activeTab === 'reports' && <AutoReportsTab />}
+        {activeTab === 'profile' && <ProfileTab />}
+        {activeTab === 'clients' && isAdmin && <ClientsTab />}
       </div>
     </div>
   );

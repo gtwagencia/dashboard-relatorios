@@ -10,7 +10,7 @@ const { query } = require('../../config/database');
  * @param {string|undefined} campaignId - Optional campaign UUID filter
  * @returns {{ conditions: string[], params: Array, nextIdx: number }}
  */
-function buildBaseConditions(clientId, dateFrom, dateTo, campaignId) {
+function buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccountId) {
   const conditions = ['ma.client_id = $1'];
   const params = [clientId];
   let nextIdx = 2;
@@ -27,6 +27,10 @@ function buildBaseConditions(clientId, dateFrom, dateTo, campaignId) {
     conditions.push(`c.id = $${nextIdx++}`);
     params.push(campaignId);
   }
+  if (metaAccountId) {
+    conditions.push(`ma.id = $${nextIdx++}`);
+    params.push(metaAccountId);
+  }
 
   return { conditions, params, nextIdx };
 }
@@ -38,8 +42,8 @@ function buildBaseConditions(clientId, dateFrom, dateTo, campaignId) {
  * @param {string|undefined} dateTo
  * @returns {Promise<object>}
  */
-async function getSummary(clientId, dateFrom, dateTo) {
-  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo);
+async function getSummary(clientId, dateFrom, dateTo, metaAccountId) {
+  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, undefined, metaAccountId);
 
   const { rows } = await query(
     `SELECT
@@ -82,8 +86,8 @@ async function getSummary(clientId, dateFrom, dateTo) {
  * @param {string|undefined} dateTo
  * @returns {Promise<object[]>}
  */
-async function getByObjective(clientId, dateFrom, dateTo) {
-  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo);
+async function getByObjective(clientId, dateFrom, dateTo, metaAccountId) {
+  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, undefined, metaAccountId);
 
   const { rows } = await query(
     `SELECT
@@ -127,8 +131,8 @@ async function getByObjective(clientId, dateFrom, dateTo) {
  * @param {string|undefined} campaignId - Optionally scope to a single campaign
  * @returns {Promise<object[]>}
  */
-async function getTimeseries(clientId, dateFrom, dateTo, campaignId) {
-  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, campaignId);
+async function getTimeseries(clientId, dateFrom, dateTo, campaignId, metaAccountId) {
+  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccountId);
 
   const { rows } = await query(
     `SELECT

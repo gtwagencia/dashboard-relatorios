@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { subDays, format } from 'date-fns';
-import { metricsApi } from '@/lib/api';
+import { metricsApi, metaApi } from '@/lib/api';
 import {
   formatCurrency,
   formatNumber,
@@ -17,7 +17,7 @@ import Card from '@/components/ui/Card';
 import SpendLineChart from '@/components/charts/SpendLineChart';
 import ObjectivePieChart from '@/components/charts/ObjectivePieChart';
 import MetricsBarChart from '@/components/charts/MetricsBarChart';
-import { MetricsSummary, ObjectiveMetrics, TimeseriesPoint } from '@/types';
+import { MetaAccount, MetricsSummary, ObjectiveMetrics, TimeseriesPoint } from '@/types';
 
 function getDateRange(range: DateRangeValue): { from: string; to: string } {
   const to = new Date();
@@ -29,29 +29,26 @@ function getDateRange(range: DateRangeValue): { from: string; to: string } {
   };
 }
 
-function fetchSummary(from: string, to: string) {
-  return metricsApi.getSummary(from, to).then((r) => r.data.summary);
-}
-
-function fetchByObjective(from: string, to: string) {
-  return metricsApi.getByObjective(from, to).then((r) => r.data.byObjective);
-}
-
-function fetchTimeseries(from: string, to: string) {
-  return metricsApi.getTimeseries(from, to).then((r) => r.data.timeseries);
-}
-
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const { from, to } = getDateRange(dateRange);
+
+  const { data: accountsData } = useSWR<MetaAccount[]>(
+    'meta-accounts-dashboard',
+    () => metaApi.list().then((r) => r.data.accounts)
+  );
+  const accounts = accountsData ?? [];
+
+  const metaAccountId = selectedAccountId || undefined;
 
   const {
     data: summary,
     isLoading: loadingSummary,
     mutate: mutateSummary,
   } = useSWR<MetricsSummary>(
-    ['metrics-summary', from, to],
-    () => fetchSummary(from, to),
+    ['metrics-summary', from, to, metaAccountId],
+    () => metricsApi.getSummary(from, to, metaAccountId).then((r) => r.data.summary),
     { refreshInterval: 5 * 60 * 1000 }
   );
 
@@ -60,8 +57,8 @@ export default function DashboardPage() {
     isLoading: loadingObjective,
     mutate: mutateObjective,
   } = useSWR<ObjectiveMetrics[]>(
-    ['metrics-objective', from, to],
-    () => fetchByObjective(from, to),
+    ['metrics-objective', from, to, metaAccountId],
+    () => metricsApi.getByObjective(from, to, metaAccountId).then((r) => r.data.byObjective),
     { refreshInterval: 5 * 60 * 1000 }
   );
 
@@ -70,8 +67,8 @@ export default function DashboardPage() {
     isLoading: loadingTimeseries,
     mutate: mutateTimeseries,
   } = useSWR<TimeseriesPoint[]>(
-    ['metrics-timeseries', from, to],
-    () => fetchTimeseries(from, to),
+    ['metrics-timeseries', from, to, metaAccountId],
+    () => metricsApi.getTimeseries(from, to, undefined, metaAccountId).then((r) => r.data.timeseries),
     { refreshInterval: 5 * 60 * 1000 }
   );
 
@@ -111,6 +108,25 @@ export default function DashboardPage() {
       />
 
       <div className="flex-1 p-6 space-y-6">
+        {/* Account Selector */}
+        {accounts.length > 1 && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-600 shrink-0">Conta:</label>
+            <select
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[200px]"
+            >
+              <option value="">Todas as contas</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.businessName || a.adAccountId}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <KpiCard

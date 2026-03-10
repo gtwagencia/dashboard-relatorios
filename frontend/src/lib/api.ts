@@ -54,19 +54,31 @@ export const authApi = {
 
   logout: (refreshToken: string) =>
     api.post('/auth/logout', { refreshToken }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { currentPassword, newPassword }),
 };
 
 // Metrics API
 export const metricsApi = {
-  getSummary: (from: string, to: string) =>
-    api.get<{ summary: MetricsSummary }>('/metrics/summary', { params: { dateFrom: from, dateTo: to } }),
+  getSummary: (from: string, to: string, metaAccountId?: string) =>
+    api.get<{ summary: MetricsSummary }>('/metrics/summary', {
+      params: { dateFrom: from, dateTo: to, ...(metaAccountId ? { metaAccountId } : {}) },
+    }),
 
-  getByObjective: (from: string, to: string) =>
-    api.get<{ byObjective: ObjectiveMetrics[] }>('/metrics/by-objective', { params: { dateFrom: from, dateTo: to } }),
+  getByObjective: (from: string, to: string, metaAccountId?: string) =>
+    api.get<{ byObjective: ObjectiveMetrics[] }>('/metrics/by-objective', {
+      params: { dateFrom: from, dateTo: to, ...(metaAccountId ? { metaAccountId } : {}) },
+    }),
 
-  getTimeseries: (from: string, to: string, campaignId?: string) =>
+  getTimeseries: (from: string, to: string, campaignId?: string, metaAccountId?: string) =>
     api.get<{ timeseries: TimeseriesPoint[] }>('/metrics/timeseries', {
-      params: { dateFrom: from, dateTo: to, ...(campaignId ? { campaignId } : {}) },
+      params: {
+        dateFrom: from,
+        dateTo: to,
+        ...(campaignId ? { campaignId } : {}),
+        ...(metaAccountId ? { metaAccountId } : {}),
+      },
     }),
 };
 
