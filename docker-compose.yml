@@ -40,7 +40,7 @@ services:
         - "traefik.docker.network=network_public"
         - "traefik.http.routers.metaads-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
         - "traefik.http.routers.metaads-api.entrypoints=websecure"
-        - "traefik.http.routers.metaads-api.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.metaads-api.tls.certresolver=letsencryptresolver"
         - "traefik.http.routers.metaads-api.priority=10"
         - "traefik.http.services.metaads-api.loadbalancer.server.port=3001"
 
@@ -62,6 +62,6 @@ services:
         - "traefik.docker.network=network_public"
         - "traefik.http.routers.metaads-frontend.rule=Host(`${DOMAIN}`)"
         - "traefik.http.routers.metaads-frontend.entrypoints=websecure"
-        - "traefik.http.routers.metaads-frontend.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.metaads-frontend.tls.certresolver=letsencryptresolver"
         - "traefik.http.routers.metaads-frontend.priority=1"
         - "traefik.http.services.metaads-frontend.loadbalancer.server.port=3000"
