@@ -191,16 +191,16 @@ export default function CampaignDetailPage() {
                 </div>
                 <p className="text-xs text-gray-500">ID: {campaign.campaignId}</p>
                 <div className="flex gap-4 mt-3 text-sm text-gray-600">
-                  {campaign.dailyBudget > 0 && (
+                  {(campaign.dailyBudget ?? 0) > 0 && (
                     <span>
                       <span className="text-gray-400">Orçamento diário: </span>
-                      <strong>{formatCurrency(campaign.dailyBudget)}</strong>
+                      <strong>{formatCurrency(campaign.dailyBudget!)}</strong>
                     </span>
                   )}
-                  {campaign.lifetimeBudget > 0 && (
+                  {(campaign.lifetimeBudget ?? 0) > 0 && (
                     <span>
                       <span className="text-gray-400">Orçamento total: </span>
-                      <strong>{formatCurrency(campaign.lifetimeBudget)}</strong>
+                      <strong>{formatCurrency(campaign.lifetimeBudget!)}</strong>
                     </span>
                   )}
                   {campaign.startTime && (
