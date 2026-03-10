@@ -216,6 +216,33 @@ async function getCampaignInsights(campaignId, datePreset = 'last_30d') {
 }
 
 /**
+ * Get financial balance info for an ad account (balance, spend_cap, amount_spent).
+ * @param {string} adAccountId
+ * @returns {Promise<object>}
+ */
+async function getAccountBalance(adAccountId) {
+  const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+
+  const response = await api.get(`/${accountId}`, {
+    params: {
+      access_token: await getGlobalToken(),
+      fields: 'balance,currency,amount_spent,spend_cap,account_status,funding_source_details',
+    },
+  });
+
+  const d = response.data;
+  // Values come in cents; divide by 100 for the real amount
+  return {
+    balance: parseInt(d.balance || 0, 10) / 100,
+    currency: d.currency || 'BRL',
+    amountSpent: parseInt(d.amount_spent || 0, 10) / 100,
+    spendCap: parseInt(d.spend_cap || 0, 10) / 100,
+    accountStatus: d.account_status,
+    displayString: d.funding_source_details?.display_string || null,
+  };
+}
+
+/**
  * Get aggregate insights for an ad account over a custom date range.
  * @param {string} adAccountId
  * @param {string} dateFrom  - YYYY-MM-DD
@@ -329,6 +356,7 @@ module.exports = {
   getCampaigns,
   getCampaignInsights,
   getAccountInsights,
+  getAccountBalance,
   normaliseInsight,
   parseRateLimit,
 };

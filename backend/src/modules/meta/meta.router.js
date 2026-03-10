@@ -3,7 +3,7 @@
 const { Router } = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../../config/database');
-const { getAdAccounts, getAccountInsights } = require('./meta.service');
+const { getAdAccounts, getAccountInsights, getAccountBalance } = require('./meta.service');
 const { syncAccount } = require('./meta.sync');
 const { authenticate, requireAdmin } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
@@ -192,6 +192,29 @@ router.get('/available', requireAdmin, async (req, res, next) => {
         code: 400,
       });
     }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/meta-accounts/:id/balance
+ * Returns balance, amount_spent and spend_cap for the Meta ad account. Admin or owning client.
+ */
+router.get('/:id/balance', async (req, res, next) => {
+  try {
+    const { clientId, role } = req.user;
+
+    const whereClause = role === 'admin' ? `WHERE id = $1` : `WHERE id = $1 AND client_id = $2`;
+    const params = role === 'admin' ? [req.params.id] : [req.params.id, clientId];
+
+    const { rows } = await query(`SELECT ad_account_id FROM meta_accounts ${whereClause}`, params);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    }
+
+    const balance = await getAccountBalance(rows[0].ad_account_id);
+    return res.status(200).json({ balance });
+  } catch (err) {
     next(err);
   }
 });

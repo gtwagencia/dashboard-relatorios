@@ -160,6 +160,9 @@ export const metaApi = {
 
   sync: (id: string) => api.post(`/meta-accounts/${id}/sync`),
 
+  getBalance: (id: string) =>
+    api.get<{ balance: { balance: number; currency: string; amountSpent: number; spendCap: number; accountStatus: number; displayString: string | null } }>(`/meta-accounts/${id}/balance`),
+
   delete: (id: string) => api.delete(`/meta-accounts/${id}`),
 };
 

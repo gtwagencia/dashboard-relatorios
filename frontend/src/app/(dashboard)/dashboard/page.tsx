@@ -51,6 +51,13 @@ export default function DashboardPage() {
   const metaAccountId = selectedAccountId || undefined;
   const campaignId = selectedCampaignId || undefined;
 
+  // Balance — only fetched when a specific account is selected
+  const { data: balanceData, isLoading: loadingBalance } = useSWR(
+    selectedAccountId ? ['account-balance', selectedAccountId] : null,
+    () => metaApi.getBalance(selectedAccountId).then((r) => r.data.balance),
+    { refreshInterval: 5 * 60 * 1000 }
+  );
+
   const {
     data: summary,
     isLoading: loadingSummary,
@@ -160,6 +167,59 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Balance card — shown only when a specific account is selected */}
+        {selectedAccountId && (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-blue-50 shrink-0">
+                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">Saldo disponível</p>
+                {loadingBalance ? (
+                  <div className="h-5 w-20 bg-gray-200 rounded animate-pulse mt-0.5" />
+                ) : (
+                  <p className="text-lg font-bold text-gray-900">
+                    {balanceData ? formatCurrency(balanceData.balance, balanceData.currency) : '-'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {balanceData && balanceData.spendCap > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500">Limite de gasto</p>
+                <p className="text-sm font-semibold text-gray-700">
+                  {formatCurrency(balanceData.spendCap, balanceData.currency)}
+                </p>
+              </div>
+            )}
+
+            {balanceData && balanceData.amountSpent > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500">Total gasto (histórico)</p>
+                <p className="text-sm font-semibold text-gray-700">
+                  {formatCurrency(balanceData.amountSpent, balanceData.currency)}
+                </p>
+              </div>
+            )}
+
+            <a
+              href={`https://business.facebook.com/billing/payment_activity`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors shrink-0"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Adicionar crédito (PIX)
+            </a>
+          </div>
+        )}
 
         {/* KPI Cards — 4 por linha */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
