@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { subDays, format } from 'date-fns';
-import { metricsApi, metaApi } from '@/lib/api';
+import { metricsApi, metaApi, campaignsApi } from '@/lib/api';
 import {
   formatCurrency,
   formatNumber,
@@ -17,7 +17,7 @@ import Card from '@/components/ui/Card';
 import MainTimeseriesChart from '@/components/charts/MainTimeseriesChart';
 import ObjectivePieChart from '@/components/charts/ObjectivePieChart';
 import MetricsBarChart from '@/components/charts/MetricsBarChart';
-import { MetaAccount, MetricsSummary, ObjectiveMetrics, TimeseriesPoint } from '@/types';
+import { Campaign, MetaAccount, MetricsSummary, ObjectiveMetrics, TimeseriesPoint } from '@/types';
 
 function getDateRange(range: DateRangeValue): { from: string; to: string } {
   const to = new Date();
@@ -32,6 +32,7 @@ function getDateRange(range: DateRangeValue): { from: string; to: string } {
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const { from, to } = getDateRange(dateRange);
 
   const { data: accountsData } = useSWR<MetaAccount[]>(
@@ -40,15 +41,23 @@ export default function DashboardPage() {
   );
   const accounts = accountsData ?? [];
 
+  const { data: campaignsData } = useSWR<Campaign[]>(
+    ['campaigns-dashboard', selectedAccountId],
+    () => campaignsApi.list({ metaAccountId: selectedAccountId || undefined, limit: 200 })
+      .then((r) => r.data.data)
+  );
+  const campaigns = campaignsData ?? [];
+
   const metaAccountId = selectedAccountId || undefined;
+  const campaignId = selectedCampaignId || undefined;
 
   const {
     data: summary,
     isLoading: loadingSummary,
     mutate: mutateSummary,
   } = useSWR<MetricsSummary>(
-    ['metrics-summary', from, to, metaAccountId],
-    () => metricsApi.getSummary(from, to, metaAccountId).then((r) => r.data.summary),
+    ['metrics-summary', from, to, metaAccountId, campaignId],
+    () => metricsApi.getSummary(from, to, metaAccountId, campaignId).then((r) => r.data.summary),
     { refreshInterval: 5 * 60 * 1000 }
   );
 
@@ -57,8 +66,8 @@ export default function DashboardPage() {
     isLoading: loadingObjective,
     mutate: mutateObjective,
   } = useSWR<ObjectiveMetrics[]>(
-    ['metrics-objective', from, to, metaAccountId],
-    () => metricsApi.getByObjective(from, to, metaAccountId).then((r) => r.data.byObjective),
+    ['metrics-objective', from, to, metaAccountId, campaignId],
+    () => metricsApi.getByObjective(from, to, metaAccountId, campaignId).then((r) => r.data.byObjective),
     { refreshInterval: 5 * 60 * 1000 }
   );
 
@@ -67,8 +76,8 @@ export default function DashboardPage() {
     isLoading: loadingTimeseries,
     mutate: mutateTimeseries,
   } = useSWR<TimeseriesPoint[]>(
-    ['metrics-timeseries', from, to, metaAccountId],
-    () => metricsApi.getTimeseries(from, to, undefined, metaAccountId).then((r) => r.data.timeseries),
+    ['metrics-timeseries', from, to, campaignId, metaAccountId],
+    () => metricsApi.getTimeseries(from, to, campaignId, metaAccountId).then((r) => r.data.timeseries),
     { refreshInterval: 5 * 60 * 1000 }
   );
 
@@ -79,6 +88,11 @@ export default function DashboardPage() {
     await Promise.all([mutateSummary(), mutateObjective(), mutateTimeseries()]);
     setRefreshing(false);
   }, [mutateSummary, mutateObjective, mutateTimeseries]);
+
+  const handleAccountChange = (accountId: string) => {
+    setSelectedAccountId(accountId);
+    setSelectedCampaignId('');
+  };
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const currency = selectedAccount?.currency || 'BRL';
@@ -108,27 +122,47 @@ export default function DashboardPage() {
       />
 
       <div className="flex-1 p-6 space-y-6">
-        {/* Account Selector */}
-        {accounts.length > 1 && (
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-gray-600 shrink-0">Conta:</label>
-            <select
-              value={selectedAccountId}
-              onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[200px]"
-            >
-              <option value="">Todas as contas</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.businessName || a.adAccountId}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Account + Campaign Selectors */}
+        <div className="flex flex-wrap items-center gap-4">
+          {accounts.length > 1 && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-600 shrink-0">Conta:</label>
+              <select
+                value={selectedAccountId}
+                onChange={(e) => handleAccountChange(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[200px]"
+              >
+                <option value="">Todas as contas</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.businessName || a.adAccountId}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {campaigns.length > 0 && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-600 shrink-0">Campanha:</label>
+              <select
+                value={selectedCampaignId}
+                onChange={(e) => setSelectedCampaignId(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[240px] max-w-[400px]"
+              >
+                <option value="">Todas as campanhas</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* KPI Cards — 4 por linha */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             label="Total Investido"
             value={summary ? formatCurrency(summary.totalSpend) : '-'}
@@ -197,6 +231,28 @@ export default function DashboardPage() {
             icon={
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            }
+          />
+          <KpiCard
+            label="Total de Vendas"
+            value={summary ? formatNumber(summary.totalConversions) : '-'}
+            loading={loadingSummary}
+            accentColor="orange"
+            icon={
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            }
+          />
+          <KpiCard
+            label="Receita de Vendas"
+            value={summary ? formatCurrency(summary.totalConversionsValue) : '-'}
+            loading={loadingSummary}
+            accentColor="green"
+            icon={
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             }
           />

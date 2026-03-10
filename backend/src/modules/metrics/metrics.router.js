@@ -17,9 +17,9 @@ router.use(authenticate);
 router.get('/summary', async (req, res, next) => {
   try {
     const clientId = req.user.role === 'admin' ? null : req.user.clientId;
-    const { dateFrom, dateTo, metaAccountId } = req.query;
+    const { dateFrom, dateTo, metaAccountId, campaignId } = req.query;
 
-    const summary = await metricsService.getSummary(clientId, dateFrom, dateTo, metaAccountId);
+    const summary = await metricsService.getSummary(clientId, dateFrom, dateTo, metaAccountId, campaignId);
     return res.status(200).json({ summary });
   } catch (err) {
     next(err);
@@ -34,9 +34,9 @@ router.get('/summary', async (req, res, next) => {
 router.get('/by-objective', async (req, res, next) => {
   try {
     const clientId = req.user.role === 'admin' ? null : req.user.clientId;
-    const { dateFrom, dateTo, metaAccountId } = req.query;
+    const { dateFrom, dateTo, metaAccountId, campaignId } = req.query;
 
-    const data = await metricsService.getByObjective(clientId, dateFrom, dateTo, metaAccountId);
+    const data = await metricsService.getByObjective(clientId, dateFrom, dateTo, metaAccountId, campaignId);
     return res.status(200).json({ byObjective: data });
   } catch (err) {
     next(err);

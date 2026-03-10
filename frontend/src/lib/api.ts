@@ -65,14 +65,14 @@ export const authApi = {
 
 // Metrics API
 export const metricsApi = {
-  getSummary: (from: string, to: string, metaAccountId?: string) =>
+  getSummary: (from: string, to: string, metaAccountId?: string, campaignId?: string) =>
     api.get<{ summary: MetricsSummary }>('/metrics/summary', {
-      params: { dateFrom: from, dateTo: to, ...(metaAccountId ? { metaAccountId } : {}) },
+      params: { dateFrom: from, dateTo: to, ...(metaAccountId ? { metaAccountId } : {}), ...(campaignId ? { campaignId } : {}) },
     }),
 
-  getByObjective: (from: string, to: string, metaAccountId?: string) =>
+  getByObjective: (from: string, to: string, metaAccountId?: string, campaignId?: string) =>
     api.get<{ byObjective: ObjectiveMetrics[] }>('/metrics/by-objective', {
-      params: { dateFrom: from, dateTo: to, ...(metaAccountId ? { metaAccountId } : {}) },
+      params: { dateFrom: from, dateTo: to, ...(metaAccountId ? { metaAccountId } : {}), ...(campaignId ? { campaignId } : {}) },
     }),
 
   getTimeseries: (from: string, to: string, campaignId?: string, metaAccountId?: string) =>

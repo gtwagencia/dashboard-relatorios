@@ -261,14 +261,16 @@ function normaliseInsight(insight) {
   const actionValues = insight.action_values || [];
   const costPerAction = insight.cost_per_action_type || [];
 
-  // Lead count — use Meta's own deduplicated total to avoid double counting.
-  // lead_grouped = Meta's official "Results" metric for leads objectives (includes WhatsApp,
-  // Messenger, form leads, etc. all deduplicated). Fall back to individual types only when absent.
+  // Lead count — priority order confirmed against live Meta API response.
+  // messaging_conversation_started_7d = Meta's "Results" for Leads+WhatsApp campaigns (matches
+  // "Custo por resultado" in Meta Ads Manager). lead_grouped is preferred when present but is
+  // absent for many WhatsApp campaigns.
   const leads =
-    extractActionValue(actions, 'onsite_conversion.lead_grouped') ||  // primary (deduplicated)
-    extractActionValue(actions, 'lead') ||                            // lead form objective
-    extractActionValue(actions, 'onsite_conversion.messaging_first_reply') || // WhatsApp/Messenger
-    extractActionValue(actions, 'offsite_conversion.fb_pixel_lead');  // pixel lead event
+    extractActionValue(actions, 'onsite_conversion.lead_grouped') ||             // deduplicated (when present)
+    extractActionValue(actions, 'onsite_conversion.messaging_conversation_started_7d') || // WhatsApp leads (primary)
+    extractActionValue(actions, 'lead') ||                                        // lead form objective
+    extractActionValue(actions, 'onsite_conversion.messaging_first_reply') ||    // messaging fallback
+    extractActionValue(actions, 'offsite_conversion.fb_pixel_lead');             // pixel lead event
 
   // Debug: log action types when leads = 0 but spend > 0 (helps diagnose missing lead tracking)
   if (leads === 0 && parseFloat(insight.spend || 0) > 0 && actions.length > 0) {

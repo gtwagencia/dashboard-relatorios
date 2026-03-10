@@ -48,8 +48,8 @@ function buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccount
  * @param {string|undefined} dateTo
  * @returns {Promise<object>}
  */
-async function getSummary(clientId, dateFrom, dateTo, metaAccountId) {
-  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, undefined, metaAccountId);
+async function getSummary(clientId, dateFrom, dateTo, metaAccountId, campaignId) {
+  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccountId);
 
   const { rows } = await query(
     `SELECT
@@ -105,8 +105,8 @@ async function getSummary(clientId, dateFrom, dateTo, metaAccountId) {
  * @param {string|undefined} dateTo
  * @returns {Promise<object[]>}
  */
-async function getByObjective(clientId, dateFrom, dateTo, metaAccountId) {
-  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, undefined, metaAccountId);
+async function getByObjective(clientId, dateFrom, dateTo, metaAccountId, campaignId) {
+  const { conditions, params } = buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccountId);
 
   const { rows } = await query(
     `SELECT

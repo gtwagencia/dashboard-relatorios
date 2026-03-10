@@ -3,7 +3,7 @@
 const { Router } = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../../config/database');
-const { getAdAccounts } = require('./meta.service');
+const { getAdAccounts, getAccountInsights } = require('./meta.service');
 const { syncAccount } = require('./meta.sync');
 const { authenticate, requireAdmin } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
@@ -192,6 +192,51 @@ router.get('/available', requireAdmin, async (req, res, next) => {
         code: 400,
       });
     }
+    next(err);
+  }
+});
+
+/**
+ * GET /api/meta-accounts/:id/raw-insights?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
+ * Returns raw Meta API insight data (actions array) for a date range. ADMIN ONLY.
+ * Use this to diagnose which action_type fields Meta is returning for a given account/period.
+ */
+router.get('/:id/raw-insights', requireAdmin, async (req, res, next) => {
+  try {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      return res.status(400).json({ error: 'dateFrom e dateTo são obrigatórios (YYYY-MM-DD)', code: 400 });
+    }
+
+    const { rows } = await query(
+      `SELECT ad_account_id FROM meta_accounts WHERE id = $1`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    }
+
+    const rawInsights = await getAccountInsights(rows[0].ad_account_id, dateFrom, dateTo);
+
+    // Return raw data + a summary of all unique action_types seen
+    const actionTypeSummary = {};
+    for (const insight of rawInsights) {
+      for (const action of (insight.actions || [])) {
+        if (!actionTypeSummary[action.action_type]) {
+          actionTypeSummary[action.action_type] = 0;
+        }
+        actionTypeSummary[action.action_type] += parseFloat(action.value) || 0;
+      }
+    }
+
+    return res.status(200).json({
+      dateFrom,
+      dateTo,
+      totalDays: rawInsights.length,
+      actionTypeSummary,
+      rawInsights,
+    });
+  } catch (err) {
     next(err);
   }
 });
