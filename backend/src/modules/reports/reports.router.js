@@ -44,9 +44,9 @@ router.post('/trigger', async (req, res, next) => {
       });
     }
 
-    if (!['daily', 'weekly', 'monthly'].includes(type)) {
+    if (!['daily', 'weekly', 'monthly', 'custom'].includes(type)) {
       return res.status(400).json({
-        error: 'type must be one of: daily, weekly, monthly',
+        error: 'type must be one of: daily, weekly, monthly, custom',
         code: 400,
       });
     }

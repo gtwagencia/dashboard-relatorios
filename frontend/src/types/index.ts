@@ -12,6 +12,7 @@ export interface MetaAccount {
   businessName: string;
   currency: string;
   syncedAt: string;
+  clientName?: string;
 }
 
 export interface Campaign {

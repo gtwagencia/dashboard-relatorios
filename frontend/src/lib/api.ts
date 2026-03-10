@@ -90,6 +90,7 @@ export const campaignsApi = {
     search?: string;
     page?: number;
     limit?: number;
+    metaAccountId?: string;
   }) => api.get<PaginatedResponse<Campaign>>('/campaigns', { params }),
 
   get: (id: string) => api.get<{ campaign: Campaign }>(`/campaigns/${id}`),

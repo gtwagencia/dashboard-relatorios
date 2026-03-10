@@ -213,6 +213,9 @@ function MetaAccountsTab() {
                   <div>
                     <p className="text-sm font-medium text-gray-800">{account.businessName}</p>
                     <p className="text-xs text-gray-500">{account.adAccountId} • {account.currency}</p>
+                    {account.clientName && (
+                      <p className="text-xs text-blue-500 font-medium">Cliente: {account.clientName}</p>
+                    )}
                     {account.syncedAt && (
                       <p className="text-xs text-gray-400 mt-0.5">
                         Última sync: {formatDateTime(account.syncedAt)}
@@ -854,7 +857,7 @@ function ClientsTab() {
                 key={c.id}
                 className={clsx(
                   'flex items-center justify-between p-3 border rounded-xl transition-all',
-                  c.isActive || c.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'
+                  c.isActive ? 'border-gray-100' : 'border-gray-100 opacity-60'
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -877,14 +880,14 @@ function ClientsTab() {
                   disabled={togglingId === c.id}
                   className={clsx(
                     'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
-                    (c.isActive || c.is_active) ? 'bg-green-500' : 'bg-gray-300'
+                    (c.isActive) ? 'bg-green-500' : 'bg-gray-300'
                   )}
-                  title={(c.isActive || c.is_active) ? 'Desativar' : 'Ativar'}
+                  title={(c.isActive) ? 'Desativar' : 'Ativar'}
                 >
                   <span
                     className={clsx(
                       'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                      (c.isActive || c.is_active) ? 'translate-x-4' : 'translate-x-0.5'
+                      (c.isActive) ? 'translate-x-4' : 'translate-x-0.5'
                     )}
                   />
                 </button>

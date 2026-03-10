@@ -11,9 +11,15 @@ const { query } = require('../../config/database');
  * @returns {{ conditions: string[], params: Array, nextIdx: number }}
  */
 function buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccountId) {
-  const conditions = ['ma.client_id = $1'];
-  const params = [clientId];
-  let nextIdx = 2;
+  const conditions = [];
+  const params = [];
+  let nextIdx = 1;
+
+  // null clientId means admin aggregating all data
+  if (clientId) {
+    conditions.push(`ma.client_id = $${nextIdx++}`);
+    params.push(clientId);
+  }
 
   if (dateFrom) {
     conditions.push(`cm.date_start >= $${nextIdx++}`);
@@ -72,11 +78,22 @@ async function getSummary(clientId, dateFrom, dateTo, metaAccountId) {
      FROM campaign_metrics cm
      JOIN campaigns c ON c.id = cm.campaign_id
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
-     WHERE ${conditions.join(' AND ')}`,
+     ${conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''}`,
     params
   );
 
-  return rows[0];
+  const r = rows[0];
+  return {
+    totalSpend: Number(r.total_spend),
+    totalImpressions: Number(r.total_impressions),
+    totalClicks: Number(r.total_clicks),
+    totalReach: Number(r.total_reach),
+    totalLeads: Number(r.total_leads),
+    totalConversions: Number(r.total_conversions),
+    avgCtr: Number(r.avg_ctr),
+    avgCpm: Number(r.avg_cpm),
+    avgCpc: Number(r.avg_cpc),
+  };
 }
 
 /**
@@ -114,13 +131,24 @@ async function getByObjective(clientId, dateFrom, dateTo, metaAccountId) {
      FROM campaign_metrics cm
      JOIN campaigns c ON c.id = cm.campaign_id
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
-     WHERE ${conditions.join(' AND ')}
+     ${conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''}
      GROUP BY c.objective
      ORDER BY total_spend DESC`,
     params
   );
 
-  return rows;
+  return rows.map((r) => ({
+    objectiveType: r.objective_type,
+    objective: r.objective_type,
+    campaigns: Number(r.campaign_count),
+    spend: Number(r.total_spend),
+    impressions: Number(r.total_impressions),
+    clicks: Number(r.total_clicks),
+    reach: Number(r.total_reach),
+    leads: Number(r.total_leads),
+    conversions: Number(r.total_conversions),
+    ctr: Number(r.avg_ctr),
+  }));
 }
 
 /**
@@ -155,7 +183,7 @@ async function getTimeseries(clientId, dateFrom, dateTo, campaignId, metaAccount
      FROM campaign_metrics cm
      JOIN campaigns c ON c.id = cm.campaign_id
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
-     WHERE ${conditions.join(' AND ')}
+     ${conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''}
      GROUP BY cm.date_start
      ORDER BY cm.date_start ASC`,
     params

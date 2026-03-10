@@ -21,13 +21,27 @@ router.get('/', async (req, res, next) => {
   try {
     const { clientId, role } = req.user;
 
-    const { rows } = await query(
-      `SELECT id, client_id, ad_account_id, business_name, currency, timezone, synced_at, created_at
-       FROM meta_accounts
-       WHERE client_id = $1
-       ORDER BY created_at DESC`,
-      [clientId]
-    );
+    let rows;
+    if (role === 'admin') {
+      // Admin sees all accounts with client name
+      const result = await query(
+        `SELECT ma.id, ma.client_id, ma.ad_account_id, ma.business_name, ma.currency, ma.timezone, ma.synced_at, ma.created_at,
+                cl.name AS client_name
+         FROM meta_accounts ma
+         JOIN clients cl ON cl.id = ma.client_id
+         ORDER BY cl.name, ma.created_at DESC`
+      );
+      rows = result.rows;
+    } else {
+      const result = await query(
+        `SELECT id, client_id, ad_account_id, business_name, currency, timezone, synced_at, created_at
+         FROM meta_accounts
+         WHERE client_id = $1
+         ORDER BY created_at DESC`,
+        [clientId]
+      );
+      rows = result.rows;
+    }
 
     const accounts = rows.map((r) => ({
       id: r.id,
@@ -38,6 +52,7 @@ router.get('/', async (req, res, next) => {
       timezone: r.timezone,
       syncedAt: r.synced_at,
       createdAt: r.created_at,
+      clientName: r.client_name || undefined,
     }));
 
     return res.status(200).json({ accounts });

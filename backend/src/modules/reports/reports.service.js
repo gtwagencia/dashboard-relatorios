@@ -202,7 +202,7 @@ async function listReports(clientId, page = 1, limit = 20) {
   );
   const total = parseInt(countRows[0].total, 10);
 
-  const { rows: reports } = await query(
+  const { rows: reportRows } = await query(
     `SELECT id, type, objective, period_start, period_end, status, webhook_url, sent_at, error_msg, created_at
      FROM reports
      WHERE client_id = $1
@@ -211,7 +211,20 @@ async function listReports(clientId, page = 1, limit = 20) {
     [clientId, limit, offset]
   );
 
-  return { reports, total };
+  const data = reportRows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    objective: r.objective,
+    periodStart: r.period_start,
+    periodEnd: r.period_end,
+    status: r.status,
+    webhookUrl: r.webhook_url,
+    sentAt: r.sent_at,
+    errorMsg: r.error_msg,
+    createdAt: r.created_at,
+  }));
+
+  return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
 /**

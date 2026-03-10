@@ -16,10 +16,11 @@ router.use(authenticate);
  */
 router.get('/', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
-    const { objective, status, page, limit } = req.query;
+    // Admins see all campaigns; clients see only their own
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
+    const { objective, status, search, page, limit, metaAccountId } = req.query;
 
-    const result = await campaignsService.getCampaigns(clientId, { objective, status, page, limit });
+    const result = await campaignsService.getCampaigns(clientId, { objective, status, search, page, limit, metaAccountId });
 
     return res.status(200).json(result);
   } catch (err) {
@@ -33,7 +34,7 @@ router.get('/', async (req, res, next) => {
  */
 router.get('/:id', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const campaign = await campaignsService.getCampaignById(clientId, req.params.id);
     return res.status(200).json({ campaign });
   } catch (err) {
@@ -48,7 +49,7 @@ router.get('/:id', async (req, res, next) => {
  */
 router.get('/:id/metrics', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const { dateFrom, dateTo } = req.query;
 
     const metrics = await campaignsService.getCampaignMetrics(

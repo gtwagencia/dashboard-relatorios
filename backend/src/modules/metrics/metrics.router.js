@@ -16,7 +16,7 @@ router.use(authenticate);
  */
 router.get('/summary', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const { dateFrom, dateTo, metaAccountId } = req.query;
 
     const summary = await metricsService.getSummary(clientId, dateFrom, dateTo, metaAccountId);
@@ -33,7 +33,7 @@ router.get('/summary', async (req, res, next) => {
  */
 router.get('/by-objective', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const { dateFrom, dateTo, metaAccountId } = req.query;
 
     const data = await metricsService.getByObjective(clientId, dateFrom, dateTo, metaAccountId);
@@ -50,7 +50,7 @@ router.get('/by-objective', async (req, res, next) => {
  */
 router.get('/timeseries', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const { dateFrom, dateTo, campaignId, metaAccountId } = req.query;
 
     const timeseries = await metricsService.getTimeseries(clientId, dateFrom, dateTo, campaignId, metaAccountId);

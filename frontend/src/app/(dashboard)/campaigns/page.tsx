@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
 import { subDays, format } from 'date-fns';
-import { campaignsApi, reportsApi } from '@/lib/api';
+import { campaignsApi, reportsApi, metaApi } from '@/lib/api';
 import {
   formatCurrency,
   formatPercent,
@@ -18,7 +18,7 @@ import TopBar, { DateRangeValue } from '@/components/layout/TopBar';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
-import { Campaign, PaginatedResponse } from '@/types';
+import { Campaign, MetaAccount, PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
 
 const OBJECTIVES = [
@@ -42,15 +42,29 @@ export default function CampaignsPage() {
   const [search, setSearch] = useState('');
   const [objective, setObjective] = useState('');
   const [status, setStatus] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
   const [page, setPage] = useState(1);
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
   const [exporting, setExporting] = useState(false);
 
+  const { data: accountsData } = useSWR<MetaAccount[]>(
+    'meta-accounts-campaigns',
+    () => metaApi.list().then((r) => r.data.accounts)
+  );
+  const accounts = accountsData ?? [];
+
   const { data, isLoading, mutate } = useSWR<PaginatedResponse<Campaign>>(
-    ['campaigns', objective, status, search, page],
+    ['campaigns', objective, status, search, page, selectedAccountId],
     () =>
       campaignsApi
-        .list({ objective: objective || undefined, status: status || undefined, search: search || undefined, page, limit: 15 })
+        .list({
+          objective: objective || undefined,
+          status: status || undefined,
+          search: search || undefined,
+          page,
+          limit: 15,
+          metaAccountId: selectedAccountId || undefined,
+        })
         .then((r) => r.data),
     { keepPreviousData: true }
   );
@@ -115,6 +129,22 @@ export default function CampaignsPage() {
                 />
               </div>
             </div>
+
+            {accounts.length > 1 && (
+              <select
+                value={selectedAccountId}
+                onChange={(e) => { setSelectedAccountId(e.target.value); setPage(1); }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
+              >
+                <option value="">Todas as contas</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.businessName || a.adAccountId}
+                    {a.clientName ? ` (${a.clientName})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <select
               value={objective}

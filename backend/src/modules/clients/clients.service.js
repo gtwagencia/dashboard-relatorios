@@ -17,7 +17,15 @@ async function listClients() {
      FROM clients
      ORDER BY created_at DESC`
   );
-  return rows;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    role: r.role,
+    isActive: r.is_active,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
 }
 
 /**
