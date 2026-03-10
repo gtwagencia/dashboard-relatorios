@@ -24,10 +24,22 @@ export function formatNumber(value: number): string {
   }).format(value);
 }
 
+// Parse a date string as LOCAL time to avoid UTC-offset day shifting (e.g. UTC-3 Brazil).
+// "2026-03-07" via parseISO becomes UTC midnight → rendered as 06/03 in BRT.
+// Parsing as local avoids the issue entirely.
+function parseDateLocal(date: string | Date): Date {
+  if (typeof date !== 'string') return date;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  if (dateOnly) {
+    const [year, month, day] = date.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return parseISO(date);
+}
+
 export function formatDate(date: string | Date): string {
   try {
-    const d = typeof date === 'string' ? parseISO(date) : date;
-    return format(d, 'dd/MM/yyyy', { locale: ptBR });
+    return format(parseDateLocal(date), 'dd/MM/yyyy', { locale: ptBR });
   } catch {
     return '-';
   }
@@ -35,8 +47,7 @@ export function formatDate(date: string | Date): string {
 
 export function formatDateTime(date: string | Date): string {
   try {
-    const d = typeof date === 'string' ? parseISO(date) : date;
-    return format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+    return format(parseDateLocal(date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
   } catch {
     return '-';
   }
@@ -44,9 +55,7 @@ export function formatDateTime(date: string | Date): string {
 
 export function formatDateRange(from: string | Date, to: string | Date): string {
   try {
-    const fromDate = typeof from === 'string' ? parseISO(from) : from;
-    const toDate = typeof to === 'string' ? parseISO(to) : to;
-    return `${format(fromDate, 'dd/MM', { locale: ptBR })} → ${format(toDate, 'dd/MM/yyyy', { locale: ptBR })}`;
+    return `${format(parseDateLocal(from), 'dd/MM', { locale: ptBR })} → ${format(parseDateLocal(to), 'dd/MM/yyyy', { locale: ptBR })}`;
   } catch {
     return '-';
   }

@@ -71,8 +71,8 @@ export default function MainTimeseriesChart({ data, currency = 'BRL' }: MainTime
   const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
     spend: true,
     leads: true,
-    conversions: false,
-    conversionsValue: false,
+    conversions: true,
+    conversionsValue: true,
   });
 
   if (!data || data.length === 0) {
@@ -83,20 +83,12 @@ export default function MainTimeseriesChart({ data, currency = 'BRL' }: MainTime
     );
   }
 
-  // Auto-show conversionsValue if there's actual revenue data
-  const hasSalesValue = data.some((d) => (d.conversionsValue ?? 0) > 0);
-  const hasConversions = data.some((d) => (d.conversions ?? 0) > 0);
-
   const formatted = data.map((d) => ({
     ...d,
     dateLabel: formatDate(d.date),
   }));
 
-  // Decide which series to show
   const show = { ...visible };
-  // Don't show salesValue toggle if there's no data
-  if (!hasSalesValue) show.conversionsValue = false;
-  if (!hasConversions) show.conversions = false;
 
   const toggle = (key: SeriesKey) =>
     setVisible((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -118,9 +110,6 @@ export default function MainTimeseriesChart({ data, currency = 'BRL' }: MainTime
       <div className="flex flex-wrap gap-2 mb-4">
         {(Object.keys(SERIES_CONFIG) as SeriesKey[]).map((key) => {
           const cfg = SERIES_CONFIG[key];
-          // Hide sales value toggle if no data
-          if (key === 'conversionsValue' && !hasSalesValue) return null;
-          if (key === 'conversions' && !hasConversions) return null;
           const isActive = visible[key];
           return (
             <button
@@ -215,7 +204,7 @@ export default function MainTimeseriesChart({ data, currency = 'BRL' }: MainTime
               name="spend"
             />
           )}
-          {show.conversionsValue && hasSalesValue && (
+          {show.conversionsValue && (
             <Line
               yAxisId="left"
               type="monotone"
