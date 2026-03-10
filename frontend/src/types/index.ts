@@ -109,7 +109,7 @@ export interface WebhookConfig {
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
-  user: Client;
+  client: Client;
 }
 
 export interface PaginatedResponse<T> {
