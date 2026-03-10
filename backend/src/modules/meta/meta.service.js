@@ -4,7 +4,7 @@ const axios = require('axios');
 const logger = require('../../utils/logger');
 const { getSetting } = require('../settings/settings.service');
 
-const META_API_VERSION = 'v19.0';
+const META_API_VERSION = 'v25.0';
 const BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
 /**
