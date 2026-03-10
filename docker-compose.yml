@@ -26,7 +26,7 @@ services:
       META_ACCESS_TOKEN: ${META_ACCESS_TOKEN}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       N8N_WEBHOOK_BASE_URL: ${N8N_WEBHOOK_BASE_URL}
-      CORS_ORIGIN: https://${DOMAIN}
+      ALLOWED_ORIGINS: https://${DOMAIN}
     networks:
       - network_public
     deploy:

@@ -20,7 +20,10 @@ echo "✓ Backend pronto"
 echo ""
 
 echo "▶ Buildando frontend..."
-docker build -t metaads-frontend:latest ./frontend
+DOMAIN="${DOMAIN:-dashboard.gtw.digital}"
+docker build \
+  --build-arg NEXT_PUBLIC_API_URL="https://${DOMAIN}/api" \
+  -t metaads-frontend:latest ./frontend
 echo "✓ Frontend pronto"
 echo ""
 
