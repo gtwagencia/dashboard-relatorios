@@ -188,25 +188,29 @@ async function syncAllAccounts() {
 
   logger.info(`Found ${accounts.length} meta accounts to sync`);
 
-  const results = await Promise.allSettled(
-    accounts.map((a) => syncAccount(a.id))
-  );
-
   let totalSynced = 0;
   let totalErrors = 0;
 
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      totalSynced += result.value.synced;
-      totalErrors += result.value.errors;
-    } else {
-      logger.error('Account sync failed', {
-        accountId: accounts[i].id,
-        error: result.reason?.message,
-      });
-      totalErrors++;
-    }
-  });
+  // Process accounts in batches of 3 to avoid exhausting the DB connection pool
+  // and hitting Meta API rate limits when there are many accounts.
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < accounts.length; i += BATCH_SIZE) {
+    const batch = accounts.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map((a) => syncAccount(a.id)));
+
+    results.forEach((result, j) => {
+      if (result.status === 'fulfilled') {
+        totalSynced += result.value.synced;
+        totalErrors += result.value.errors;
+      } else {
+        logger.error('Account sync failed', {
+          accountId: batch[j].id,
+          error: result.reason?.message,
+        });
+        totalErrors++;
+      }
+    });
+  }
 
   logger.info('All accounts sync complete', { totalSynced, totalErrors });
 }
