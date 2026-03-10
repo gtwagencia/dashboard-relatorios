@@ -2,11 +2,7 @@ version: '3.9'
 
 # =============================================================
 # Meta Ads Dashboard — Docker Swarm Stack
-# Imagens buildadas automaticamente via GitHub Actions e
-# hospedadas no Docker Hub.
-#
-# Variável obrigatória no Portainer:
-#   DOCKERHUB_USERNAME = seu usuário do Docker Hub
+# Imagens buildadas localmente no servidor com build.sh
 # =============================================================
 
 networks:
@@ -16,7 +12,7 @@ networks:
 services:
 
   metaads-backend:
-    image: ${DOCKERHUB_USERNAME}/metaads-backend:latest
+    image: metaads-backend:latest
     environment:
       NODE_ENV: production
       PORT: "3001"
@@ -49,7 +45,7 @@ services:
         - "traefik.http.services.metaads-api.loadbalancer.server.port=3001"
 
   metaads-frontend:
-    image: ${DOCKERHUB_USERNAME}/metaads-frontend:latest
+    image: metaads-frontend:latest
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: "https://${DOMAIN}/api"
