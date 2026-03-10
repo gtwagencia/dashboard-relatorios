@@ -58,9 +58,11 @@ export function getUser(): Client | null {
   const payload = decodeJwtPayload(token);
   if (!payload) return null;
 
+  if (!payload.id) return null;
+
   return {
-    id: payload.sub as string,
-    name: payload.name as string,
+    id: payload.id as string,
+    name: (payload.name as string) || (payload.email as string),
     email: payload.email as string,
     role: payload.role as string,
     isActive: true,
@@ -82,15 +84,15 @@ export function isAuthenticated(): boolean {
   return Date.now() < (exp * 1000) - 30000;
 }
 
-// Login: call API, store tokens, return user
+// Login: call API, store tokens, return client
 export async function login(email: string, password: string): Promise<Client> {
   const response = await authApi.login(email, password);
-  const { accessToken, refreshToken, user } = response.data;
+  const { accessToken, refreshToken, client } = response.data;
 
   setToken(accessToken);
   setRefreshToken(refreshToken);
 
-  return user;
+  return client;
 }
 
 // Logout: call API logout, clear tokens, redirect
