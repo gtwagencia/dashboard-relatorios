@@ -170,7 +170,7 @@ export default function CampaignsPage() {
               </div>
             </div>
 
-            {accounts.length > 1 && (
+            {accounts.length > 0 && (
               <select
                 value={selectedAccountId}
                 onChange={(e) => { setSelectedAccountId(e.target.value); setPage(1); }}
