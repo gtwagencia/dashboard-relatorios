@@ -10,6 +10,7 @@ const logger = require('../../utils/logger');
 const ACCESS_TOKEN_EXPIRY = '24h';
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 const REFRESH_TOKEN_EXPIRY_MS = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+const BCRYPT_ROUNDS = 10;
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
