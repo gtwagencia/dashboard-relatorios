@@ -113,8 +113,8 @@ async function runReportsForAllClients(type, periodStart, periodEnd) {
 function initScheduler() {
   logger.info('[Scheduler] Initialising cron jobs');
 
-  // ── Meta sync: every 30 minutes ───────────────────────────────────────────
-  cron.schedule('*/30 * * * *', async () => {
+  // ── Meta sync: daily at 03:00 BRT = 06:00 UTC ────────────────────────────
+  cron.schedule('0 6 * * *', async () => {
     logger.info('[Scheduler] Running Meta accounts sync');
     try {
       await syncAllAccounts();
@@ -146,7 +146,7 @@ function initScheduler() {
 
   logger.info('[Scheduler] All cron jobs registered', {
     jobs: [
-      'Meta sync: every 30 minutes',
+      'Meta sync: 06:00 UTC (03:00 BRT)',
       'Daily reports: 10:00 UTC (07:00 BRT)',
       'Weekly reports: Monday 11:00 UTC (08:00 BRT)',
       'Monthly reports: 1st of month 12:00 UTC (09:00 BRT)',
