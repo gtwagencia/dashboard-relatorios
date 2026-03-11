@@ -221,8 +221,14 @@ router.get('/:id/balance', async (req, res, next) => {
       return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
     }
 
-    const balance = await getAccountBalance(rows[0].ad_account_id);
-    return res.status(200).json({ balance });
+    try {
+      const balance = await getAccountBalance(rows[0].ad_account_id);
+      return res.status(200).json({ balance });
+    } catch (balanceErr) {
+      const detail = balanceErr.response?.data?.error?.message || balanceErr.message || 'Erro ao buscar saldo';
+      logger.error('Balance fetch failed', { adAccountId: rows[0].ad_account_id, error: detail });
+      return res.status(500).json({ error: detail, code: 500 });
+    }
   } catch (err) {
     next(err);
   }

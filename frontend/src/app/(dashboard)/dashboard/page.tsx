@@ -67,10 +67,10 @@ export default function DashboardPage() {
   const campaignId = selectedCampaignId || undefined;
 
   // Balance — only fetched when a specific account is selected
-  const { data: balanceData, isLoading: loadingBalance } = useSWR(
+  const { data: balanceData, isLoading: loadingBalance, error: balanceError } = useSWR(
     selectedAccountId ? ['account-balance', selectedAccountId] : null,
     () => metaApi.getBalance(selectedAccountId).then((r) => r.data.balance),
-    { refreshInterval: 5 * 60 * 1000 }
+    { refreshInterval: 5 * 60 * 1000, shouldRetryOnError: false }
   );
 
   const {
@@ -225,9 +225,17 @@ export default function DashboardPage() {
                 <p className="text-xs font-medium text-gray-500">Saldo disponível</p>
                 {loadingBalance ? (
                   <div className="h-5 w-20 bg-gray-200 rounded animate-pulse mt-0.5" />
+                ) : balanceError ? (
+                  <p className="text-sm font-medium text-red-500 mt-0.5">
+                    {balanceError?.response?.data?.error || 'Erro ao carregar saldo'}
+                  </p>
                 ) : (
                   <p className="text-lg font-bold text-gray-900">
-                    {balanceData ? formatCurrency(balanceData.balance, balanceData.currency) : '-'}
+                    {balanceData
+                      ? balanceData.balance > 0
+                        ? formatCurrency(balanceData.balance, balanceData.currency)
+                        : 'R$ 0,00 (sem crédito)'
+                      : '-'}
                   </p>
                 )}
               </div>

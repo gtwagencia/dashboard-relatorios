@@ -237,6 +237,7 @@ async function getAccountBalance(adAccountId) {
         'account_status',
         'funding_source_details',
         'adspaymentcycle',
+        'owner',
       ].join(','),
     },
   });
@@ -247,19 +248,30 @@ async function getAccountBalance(adAccountId) {
   // Use parseFloat to preserve any fractional cents, then divide by 100.
   const toAmount = (raw) => (raw != null && raw !== '' ? parseFloat(raw) / 100 : 0);
 
-  // Log raw values so discrepancies can be diagnosed
-  logger.debug('Meta account balance raw response', {
+  // Log raw values for diagnostics
+  logger.info('Meta account balance raw response', {
     adAccountId,
     balance: d.balance,
     amount_spent: d.amount_spent,
     spend_cap: d.spend_cap,
     currency: d.currency,
     account_status: d.account_status,
-    adspaymentcycle: d.adspaymentcycle,
+    adspaymentcycle: JSON.stringify(d.adspaymentcycle),
+    funding_source: d.funding_source_details?.display_string,
   });
 
+  // Some accounts (e.g. postpaid / credit-card billing) don't expose 'balance'.
+  // In that case try the payment cycle's remaining amount as a fallback.
+  let balance = toAmount(d.balance);
+  if (balance === 0 && d.adspaymentcycle) {
+    const cycle = Array.isArray(d.adspaymentcycle) ? d.adspaymentcycle[0] : d.adspaymentcycle;
+    if (cycle?.remaining_amount != null) {
+      balance = toAmount(cycle.remaining_amount);
+    }
+  }
+
   return {
-    balance: toAmount(d.balance),
+    balance,
     currency: d.currency || 'BRL',
     amountSpent: toAmount(d.amount_spent),
     spendCap: toAmount(d.spend_cap),
