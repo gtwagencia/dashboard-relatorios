@@ -33,11 +33,16 @@ router.get('/', async (req, res, next) => {
       );
       rows = result.rows;
     } else {
+      // Non-admin sees owned accounts + accounts shared with them
       const result = await query(
-        `SELECT id, client_id, ad_account_id, business_name, currency, timezone, synced_at, created_at
-         FROM meta_accounts
-         WHERE client_id = $1
-         ORDER BY created_at DESC`,
+        `SELECT ma.id, ma.client_id, ma.ad_account_id, ma.business_name, ma.currency, ma.timezone, ma.synced_at, ma.created_at
+         FROM meta_accounts ma
+         WHERE ma.client_id = $1
+            OR EXISTS (
+              SELECT 1 FROM meta_account_shares s
+              WHERE s.meta_account_id = ma.id AND s.client_id = $1
+            )
+         ORDER BY ma.created_at DESC`,
         [clientId]
       );
       rows = result.rows;
@@ -215,7 +220,9 @@ router.get('/:id/balance', async (req, res, next) => {
   try {
     const { clientId, role } = req.user;
 
-    const whereClause = role === 'admin' ? `WHERE id = $1` : `WHERE id = $1 AND client_id = $2`;
+    const whereClause = role === 'admin'
+      ? `WHERE id = $1`
+      : `WHERE id = $1 AND (client_id = $2 OR EXISTS (SELECT 1 FROM meta_account_shares s WHERE s.meta_account_id = meta_accounts.id AND s.client_id = $2))`;
     const params = role === 'admin' ? [req.params.id] : [req.params.id, clientId];
 
     const { rows } = await query(`SELECT ad_account_id FROM meta_accounts ${whereClause}`, params);
@@ -304,6 +311,74 @@ router.get('/:id/raw-insights', requireAdmin, async (req, res, next) => {
       actionTypeSummary,
       rawInsights,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/meta-accounts/:id/shares
+ * List clients that have shared access to this account. ADMIN ONLY.
+ */
+router.get('/:id/shares', requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT cl.id, cl.name, cl.email
+       FROM meta_account_shares s
+       JOIN clients cl ON cl.id = s.client_id
+       WHERE s.meta_account_id = $1
+       ORDER BY cl.name`,
+      [req.params.id]
+    );
+    return res.status(200).json({ shares: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/meta-accounts/:id/shares
+ * Grant a client access to this account. ADMIN ONLY.
+ * Body: { clientId }
+ */
+router.post('/:id/shares', requireAdmin, async (req, res, next) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) {
+      return res.status(400).json({ error: 'clientId é obrigatório', code: 400 });
+    }
+
+    // Verify account exists
+    const { rows: accRows } = await query(`SELECT id, client_id FROM meta_accounts WHERE id = $1`, [req.params.id]);
+    if (accRows.length === 0) {
+      return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    }
+    // Cannot share with the owner (they already have access via client_id)
+    if (accRows[0].client_id === clientId) {
+      return res.status(400).json({ error: 'Este cliente já é o titular da conta', code: 400 });
+    }
+
+    await query(
+      `INSERT INTO meta_account_shares (meta_account_id, client_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [req.params.id, clientId]
+    );
+    return res.status(201).json({ message: 'Acesso concedido' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/meta-accounts/:id/shares/:clientId
+ * Revoke a client's shared access. ADMIN ONLY.
+ */
+router.delete('/:id/shares/:clientId', requireAdmin, async (req, res, next) => {
+  try {
+    await query(
+      `DELETE FROM meta_account_shares WHERE meta_account_id = $1 AND client_id = $2`,
+      [req.params.id, req.params.clientId]
+    );
+    return res.status(200).json({ message: 'Acesso revogado' });
   } catch (err) {
     next(err);
   }

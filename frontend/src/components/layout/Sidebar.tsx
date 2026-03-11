@@ -76,27 +76,15 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-800">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 shrink-0">
-          <svg
-            className="w-4 h-4 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-            />
-          </svg>
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 shrink-0 text-white text-xs font-bold">
+          GTW
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
             <p className="text-white text-sm font-bold leading-tight truncate">
-              Meta Ads
+              GTW Agência
             </p>
-            <p className="text-gray-500 text-xs truncate">Dashboard</p>
+            <p className="text-gray-500 text-xs truncate">Meta Ads Dashboard</p>
           </div>
         )}
         {onToggle && (

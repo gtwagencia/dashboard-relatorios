@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
-  title: 'Meta Ads Dashboard',
+  title: 'GTW Agência',
   description: 'Painel de controle para campanhas Meta Ads',
 };
 

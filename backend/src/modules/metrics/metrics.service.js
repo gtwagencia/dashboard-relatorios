@@ -15,9 +15,10 @@ function buildBaseConditions(clientId, dateFrom, dateTo, campaignId, metaAccount
   const params = [];
   let nextIdx = 1;
 
-  // null clientId means admin aggregating all data
+  // null clientId means admin aggregating all data; non-admin sees owned + shared
   if (clientId) {
-    conditions.push(`ma.client_id = $${nextIdx++}`);
+    conditions.push(`(ma.client_id = $${nextIdx} OR EXISTS (SELECT 1 FROM meta_account_shares s WHERE s.meta_account_id = ma.id AND s.client_id = $${nextIdx}))`);
+    nextIdx++;
     params.push(clientId);
   }
 

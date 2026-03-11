@@ -164,6 +164,14 @@ export const metaApi = {
     api.get<{ balance: { balance: number; currency: string; amountSpent: number; spendCap: number; accountStatus: number; displayString: string | null } }>(`/meta-accounts/${id}/balance`),
 
   delete: (id: string) => api.delete(`/meta-accounts/${id}`),
+
+  // Share management (admin only)
+  listShares: (id: string) =>
+    api.get<{ shares: Array<{ id: string; name: string; email: string }> }>(`/meta-accounts/${id}/shares`),
+  addShare: (id: string, clientId: string) =>
+    api.post(`/meta-accounts/${id}/shares`, { clientId }),
+  removeShare: (id: string, clientId: string) =>
+    api.delete(`/meta-accounts/${id}/shares/${clientId}`),
 };
 
 export const adminApi = {

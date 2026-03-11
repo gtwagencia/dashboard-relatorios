@@ -18,9 +18,10 @@ async function getCampaigns(clientId, filters = {}) {
   const whereParams = [];
   let whereIdx = 1;
 
-  // null clientId means admin sees all campaigns
+  // null clientId means admin sees all campaigns; non-admin sees owned + shared
   if (clientId) {
-    conditions.push(`ma.client_id = $${whereIdx++}`);
+    conditions.push(`(ma.client_id = $${whereIdx} OR EXISTS (SELECT 1 FROM meta_account_shares s WHERE s.meta_account_id = ma.id AND s.client_id = $${whereIdx}))`);
+    whereIdx++;
     whereParams.push(clientId);
   }
   if (objective) {
@@ -149,8 +150,10 @@ async function getCampaigns(clientId, filters = {}) {
  * @returns {Promise<object>}
  */
 async function getCampaignById(clientId, campaignId) {
-  // clientId null = admin, sees any campaign
-  const whereExtra = clientId ? `AND ma.client_id = $2` : '';
+  // clientId null = admin, sees any campaign; non-admin sees owned + shared
+  const whereExtra = clientId
+    ? `AND (ma.client_id = $2 OR EXISTS (SELECT 1 FROM meta_account_shares s WHERE s.meta_account_id = ma.id AND s.client_id = $2))`
+    : '';
   const params = clientId ? [campaignId, clientId] : [campaignId];
 
   const { rows } = await query(
@@ -227,13 +230,14 @@ async function getCampaignById(clientId, campaignId) {
  * @returns {Promise<object[]>}
  */
 async function getCampaignMetrics(clientId, campaignId, dateFrom, dateTo) {
-  // Verify ownership (skip check for admin: clientId null)
+  // Verify ownership or shared access (skip check for admin: clientId null)
   if (clientId) {
     const { rows: ownership } = await query(
       `SELECT c.id
        FROM campaigns c
        JOIN meta_accounts ma ON ma.id = c.meta_account_id
-       WHERE c.id = $1 AND ma.client_id = $2`,
+       WHERE c.id = $1
+         AND (ma.client_id = $2 OR EXISTS (SELECT 1 FROM meta_account_shares s WHERE s.meta_account_id = ma.id AND s.client_id = $2))`,
       [campaignId, clientId]
     );
     if (ownership.length === 0) {
