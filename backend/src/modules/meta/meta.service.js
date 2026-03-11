@@ -236,8 +236,6 @@ async function getAccountBalance(adAccountId) {
         'spend_cap',
         'account_status',
         'funding_source_details',
-        'adspaymentcycle',
-        'owner',
       ].join(','),
     },
   });
@@ -256,19 +254,10 @@ async function getAccountBalance(adAccountId) {
     spend_cap: d.spend_cap,
     currency: d.currency,
     account_status: d.account_status,
-    adspaymentcycle: JSON.stringify(d.adspaymentcycle),
     funding_source: d.funding_source_details?.display_string,
   });
 
-  // Some accounts (e.g. postpaid / credit-card billing) don't expose 'balance'.
-  // In that case try the payment cycle's remaining amount as a fallback.
-  let balance = toAmount(d.balance);
-  if (balance === 0 && d.adspaymentcycle) {
-    const cycle = Array.isArray(d.adspaymentcycle) ? d.adspaymentcycle[0] : d.adspaymentcycle;
-    if (cycle?.remaining_amount != null) {
-      balance = toAmount(cycle.remaining_amount);
-    }
-  }
+  const balance = toAmount(d.balance);
 
   return {
     balance,
@@ -282,7 +271,6 @@ async function getAccountBalance(adAccountId) {
       balance: d.balance,
       amount_spent: d.amount_spent,
       spend_cap: d.spend_cap,
-      adspaymentcycle: d.adspaymentcycle,
       funding_source_details: d.funding_source_details,
     },
   };
