@@ -77,10 +77,13 @@ function MetaAccountsTab() {
     setSyncingId(id);
     try {
       await metaApi.sync(id);
-      await mutate();
-      toast.success('Sincronização iniciada!');
-    } catch {
-      toast.error('Erro ao sincronizar conta.');
+      toast.success('Sincronização iniciada. Atualize a página em alguns minutos.');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        (err as { message?: string })?.message ||
+        'Erro ao sincronizar conta.';
+      toast.error(msg);
     } finally {
       setSyncingId(null);
     }

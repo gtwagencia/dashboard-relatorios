@@ -166,20 +166,22 @@ router.post('/:id/sync', async (req, res, next) => {
       return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
     }
 
-    try {
-      const result = await syncAccount(req.params.id);
-      return res.status(200).json({
-        message: 'Sincronização concluída',
-        metaAccountId: req.params.id,
-        synced: result.synced,
-        errors: result.errors,
+    // Fire-and-forget: respond immediately so the HTTP request doesn't block
+    // the server while the sync runs (which can take several minutes for large accounts).
+    // The per-account lock inside syncAccount prevents duplicate concurrent syncs.
+    syncAccount(req.params.id)
+      .then((result) => {
+        logger.info('Manual sync completed', { metaAccountId: req.params.id, ...result });
+      })
+      .catch((err) => {
+        const detail = err.response?.data?.error?.message || err.message || 'Erro desconhecido';
+        logger.error('Manual sync failed', { metaAccountId: req.params.id, error: detail });
       });
-    } catch (syncErr) {
-      // Surface the real error (Meta API message or DB error) even in production
-      const detail = syncErr.response?.data?.error?.message || syncErr.message || 'Erro desconhecido';
-      logger.error('Manual sync failed', { metaAccountId: req.params.id, error: detail });
-      return res.status(500).json({ error: `Sincronização falhou: ${detail}`, code: 500 });
-    }
+
+    return res.status(202).json({
+      message: 'Sincronização iniciada. Os dados serão atualizados em breve.',
+      metaAccountId: req.params.id,
+    });
   } catch (err) {
     next(err);
   }

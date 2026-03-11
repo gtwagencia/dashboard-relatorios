@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:graph.facebook.com)"
+      "WebFetch(domain:graph.facebook.com)",
+      "Bash(wc -l \"/g/Meu Drive/Relatórios Claude/meta-ads-dashboard/frontend/src/app/\\(dashboard\\)/settings/page.tsx\")"
     ]
   }
 }
