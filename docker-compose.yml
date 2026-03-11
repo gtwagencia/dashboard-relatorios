@@ -32,9 +32,8 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        condition: any
+        delay: 10s
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
@@ -54,9 +53,8 @@ services:
     deploy:
       replicas: 1
       restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
+        condition: any
+        delay: 10s
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
