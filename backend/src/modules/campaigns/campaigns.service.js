@@ -42,17 +42,6 @@ async function getCampaigns(clientId, filters = {}) {
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  // Total count (no date filter — counts campaigns, not metrics rows)
-  const countResult = await query(
-    `SELECT COUNT(*) AS total
-     FROM campaigns c
-     JOIN meta_accounts ma ON ma.id = c.meta_account_id
-     ${whereClause}`,
-    whereParams
-  );
-
-  const total = parseInt(countResult.rows[0].total, 10);
-
   // Date filter for LEFT JOIN on campaign_metrics (so totals reflect selected period)
   const dataParams = [...whereParams];
   let dataIdx = whereIdx;
@@ -66,6 +55,25 @@ async function getCampaigns(clientId, filters = {}) {
     dataParams.push(dateTo);
   }
   const joinDateClause = joinDateParts.join(' ');
+
+  // Only show campaigns that had at least 1 impression in the selected period
+  const havingClause = (dateFrom || dateTo) ? 'HAVING COALESCE(SUM(cm.impressions), 0) > 0' : '';
+
+  // Total count (respects date filter + impressions filter)
+  const countResult = await query(
+    `SELECT COUNT(*) AS total FROM (
+       SELECT c.id
+       FROM campaigns c
+       JOIN meta_accounts ma ON ma.id = c.meta_account_id
+       LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id ${joinDateClause}
+       ${whereClause}
+       GROUP BY c.id
+       ${havingClause}
+     ) sub`,
+    dataParams
+  );
+
+  const total = parseInt(countResult.rows[0].total, 10);
 
   // Paginated results with spend/metrics filtered by date range
   const { rows: campaigns } = await query(
@@ -95,6 +103,7 @@ async function getCampaigns(clientId, filters = {}) {
      LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id ${joinDateClause}
      ${whereClause}
      GROUP BY c.id, ma.business_name, ma.ad_account_id, ma.currency
+     ${havingClause}
      ORDER BY
        CASE c.status
          WHEN 'ACTIVE'   THEN 1

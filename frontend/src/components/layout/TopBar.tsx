@@ -5,7 +5,7 @@ import { logout, getUser } from '@/lib/auth';
 import Button from '@/components/ui/Button';
 import clsx from 'clsx';
 
-export type DateRangeValue = '7d' | '30d' | '90d' | 'custom';
+export type DateRangeValue = '7d' | '30d' | 'custom';
 
 interface DateRangeOption {
   label: string;
@@ -15,7 +15,6 @@ interface DateRangeOption {
 const DATE_RANGES: DateRangeOption[] = [
   { label: '7 dias', value: '7d' },
   { label: '30 dias', value: '30d' },
-  { label: '90 dias', value: '90d' },
   { label: 'Personalizado', value: 'custom' },
 ];
 

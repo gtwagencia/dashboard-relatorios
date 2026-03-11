@@ -28,7 +28,7 @@ function getDateRange(
     return { from: customFrom, to: customTo };
   }
   const to = new Date();
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  const days = range === '7d' ? 7 : 30;
   return {
     from: format(subDays(to, days), 'yyyy-MM-dd'),
     to: format(to, 'yyyy-MM-dd'),
@@ -57,8 +57,8 @@ export default function DashboardPage() {
   }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: campaignsData } = useSWR<Campaign[]>(
-    ['campaigns-dashboard', selectedAccountId],
-    () => campaignsApi.list({ metaAccountId: selectedAccountId || undefined, limit: 200 })
+    ['campaigns-dashboard', selectedAccountId, from, to],
+    () => campaignsApi.list({ metaAccountId: selectedAccountId || undefined, limit: 200, dateFrom: from, dateTo: to })
       .then((r) => r.data.data)
   );
   const campaigns = campaignsData ?? [];
@@ -70,7 +70,7 @@ export default function DashboardPage() {
   const { data: balanceData, isLoading: loadingBalance, error: balanceError } = useSWR(
     selectedAccountId ? ['account-balance', selectedAccountId] : null,
     () => metaApi.getBalance(selectedAccountId).then((r) => r.data.balance),
-    { refreshInterval: 5 * 60 * 1000, shouldRetryOnError: false }
+    { refreshInterval: 30 * 60 * 1000, shouldRetryOnError: false }
   );
 
   const {

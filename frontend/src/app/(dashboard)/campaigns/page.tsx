@@ -46,7 +46,7 @@ function getDateRange(
     return { dateFrom: customFrom, dateTo: customTo };
   }
   const to = new Date();
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  const days = range === '7d' ? 7 : 30;
   return {
     dateFrom: format(subDays(to, days), 'yyyy-MM-dd'),
     dateTo: format(to, 'yyyy-MM-dd'),
