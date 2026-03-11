@@ -95,7 +95,15 @@ async function getCampaigns(clientId, filters = {}) {
      LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id ${joinDateClause}
      ${whereClause}
      GROUP BY c.id, ma.business_name, ma.ad_account_id, ma.currency
-     ORDER BY c.synced_at DESC NULLS LAST, c.created_at DESC
+     ORDER BY
+       CASE c.status
+         WHEN 'ACTIVE'   THEN 1
+         WHEN 'PAUSED'   THEN 2
+         WHEN 'INACTIVE' THEN 3
+         ELSE                 4
+       END,
+       c.start_time DESC NULLS LAST,
+       c.created_at DESC
      LIMIT $${dataIdx++} OFFSET $${dataIdx++}`,
     [...dataParams, limit, offset]
   );
