@@ -232,9 +232,16 @@ export default function DashboardPage() {
                 ) : (
                   <p className="text-lg font-bold text-gray-900">
                     {balanceData
-                      ? balanceData.balance > 0
-                        ? formatCurrency(balanceData.balance, balanceData.currency)
-                        : 'R$ 0,00 (sem crédito)'
+                      ? (() => {
+                          // For credit-line accounts: available = spendCap - amountSpent
+                          // For prepay accounts: use balance field
+                          const available = balanceData.spendCap > 0
+                            ? balanceData.spendCap - balanceData.amountSpent
+                            : balanceData.balance;
+                          return available > 0
+                            ? formatCurrency(available, balanceData.currency)
+                            : 'R$ 0,00 (sem crédito)';
+                        })()
                       : '-'}
                   </p>
                 )}
