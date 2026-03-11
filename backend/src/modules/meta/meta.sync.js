@@ -50,30 +50,22 @@ async function upsertCampaign(metaAccountId, campaign) {
  * @param {object} metrics            - Normalised insight object from normaliseInsight()
  */
 async function upsertMetrics(internalCampaignId, metrics) {
-  await query(
-    `INSERT INTO campaign_metrics
-       (campaign_id, date_start, date_stop, impressions, reach, clicks, spend,
-        ctr, cpc, cpm, conversions, leads, cost_per_lead, cost_per_result,
-        frequency, video_views, conversions_value, raw_json)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-     ON CONFLICT (campaign_id, date_start) DO UPDATE SET
-       date_stop          = EXCLUDED.date_stop,
-       impressions        = EXCLUDED.impressions,
-       reach              = EXCLUDED.reach,
-       clicks             = EXCLUDED.clicks,
-       spend              = EXCLUDED.spend,
-       ctr                = EXCLUDED.ctr,
-       cpc                = EXCLUDED.cpc,
-       cpm                = EXCLUDED.cpm,
-       conversions        = EXCLUDED.conversions,
-       leads              = EXCLUDED.leads,
-       cost_per_lead      = EXCLUDED.cost_per_lead,
-       cost_per_result    = EXCLUDED.cost_per_result,
-       frequency          = EXCLUDED.frequency,
-       video_views        = EXCLUDED.video_views,
-       conversions_value  = EXCLUDED.conversions_value,
-       raw_json           = EXCLUDED.raw_json`,
-    [
+  await batchUpsertMetrics(internalCampaignId, [metrics]);
+}
+
+/**
+ * Upsert multiple insight rows for a campaign in a single query.
+ * This dramatically reduces the number of DB round-trips compared to one INSERT per row.
+ * @param {string}   internalCampaignId - Internal UUID
+ * @param {object[]} metricsList        - Array of normalised insight objects
+ */
+async function batchUpsertMetrics(internalCampaignId, metricsList) {
+  if (metricsList.length === 0) return;
+
+  const params = [];
+  const valueClauses = metricsList.map((metrics) => {
+    const base = params.length + 1;
+    params.push(
       internalCampaignId,
       metrics.date_start,
       metrics.date_stop,
@@ -91,8 +83,35 @@ async function upsertMetrics(internalCampaignId, metrics) {
       metrics.frequency,
       metrics.video_views,
       metrics.conversions_value || 0,
-      JSON.stringify(metrics.raw_json),
-    ]
+      JSON.stringify(metrics.raw_json)
+    );
+    return `($${base},$${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16},$${base+17})`;
+  });
+
+  await query(
+    `INSERT INTO campaign_metrics
+       (campaign_id, date_start, date_stop, impressions, reach, clicks, spend,
+        ctr, cpc, cpm, conversions, leads, cost_per_lead, cost_per_result,
+        frequency, video_views, conversions_value, raw_json)
+     VALUES ${valueClauses.join(', ')}
+     ON CONFLICT (campaign_id, date_start) DO UPDATE SET
+       date_stop          = EXCLUDED.date_stop,
+       impressions        = EXCLUDED.impressions,
+       reach              = EXCLUDED.reach,
+       clicks             = EXCLUDED.clicks,
+       spend              = EXCLUDED.spend,
+       ctr                = EXCLUDED.ctr,
+       cpc                = EXCLUDED.cpc,
+       cpm                = EXCLUDED.cpm,
+       conversions        = EXCLUDED.conversions,
+       leads              = EXCLUDED.leads,
+       cost_per_lead      = EXCLUDED.cost_per_lead,
+       cost_per_result    = EXCLUDED.cost_per_result,
+       frequency          = EXCLUDED.frequency,
+       video_views        = EXCLUDED.video_views,
+       conversions_value  = EXCLUDED.conversions_value,
+       raw_json           = EXCLUDED.raw_json`,
+    params
   );
 }
 
@@ -145,9 +164,9 @@ async function syncAccount(metaAccountId) {
       if (syncableStatuses.includes(campaignStatus.toUpperCase())) {
         const insights = await getCampaignInsights(campaign.id, 'last_30d');
 
-        for (const insight of insights) {
-          const metrics = normaliseInsight(insight);
-          await upsertMetrics(internalId, metrics);
+        if (insights.length > 0) {
+          const metricsList = insights.map(normaliseInsight);
+          await batchUpsertMetrics(internalId, metricsList);
         }
       }
 
@@ -215,4 +234,4 @@ async function syncAllAccounts() {
   logger.info('All accounts sync complete', { totalSynced, totalErrors });
 }
 
-module.exports = { syncAccount, syncAllAccounts, upsertCampaign, upsertMetrics };
+module.exports = { syncAccount, syncAllAccounts, upsertCampaign, upsertMetrics, batchUpsertMetrics };

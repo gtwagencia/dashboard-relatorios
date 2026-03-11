@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 import { subDays, format } from 'date-fns';
 import { metricsApi, metaApi, campaignsApi } from '@/lib/api';
@@ -48,6 +48,13 @@ export default function DashboardPage() {
     () => metaApi.list().then((r) => r.data.accounts)
   );
   const accounts = accountsData ?? [];
+
+  // Auto-select the only account so balance loads without needing the dropdown
+  useEffect(() => {
+    if (accounts.length === 1 && !selectedAccountId) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: campaignsData } = useSWR<Campaign[]>(
     ['campaigns-dashboard', selectedAccountId],
@@ -124,17 +131,13 @@ export default function DashboardPage() {
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const currency = selectedAccount?.currency || 'BRL';
 
-  // Objective-specific cost calculations:
-  // Cost per lead uses only spend from lead-objective campaigns
-  // Cost per sale uses only spend from sales-objective campaigns
-  const LEAD_OBJECTIVES = ['OUTCOME_LEADS', 'LEAD_GENERATION'];
-  const SALES_OBJECTIVES = ['OUTCOME_SALES', 'CONVERSIONS', 'PRODUCT_CATALOG_SALES'];
-
-  const leadRows = (byObjective ?? []).filter((o) =>
-    LEAD_OBJECTIVES.includes((o.objectiveType || o.objective)?.toUpperCase())
+  // Objective-specific cost calculations.
+  // The DB stores normalized objectives: 'leads', 'sales', 'engagement', 'awareness', 'traffic'.
+  const leadRows = (byObjective ?? []).filter(
+    (o) => (o.objectiveType || o.objective)?.toLowerCase() === 'leads'
   );
-  const salesRows = (byObjective ?? []).filter((o) =>
-    SALES_OBJECTIVES.includes((o.objectiveType || o.objective)?.toUpperCase())
+  const salesRows = (byObjective ?? []).filter(
+    (o) => (o.objectiveType || o.objective)?.toLowerCase() === 'sales'
   );
 
   const leadSpend = leadRows.reduce((s, o) => s + o.spend, 0);

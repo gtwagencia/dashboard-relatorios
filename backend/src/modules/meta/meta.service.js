@@ -151,32 +151,35 @@ async function getAdAccounts() {
 async function getCampaigns(adAccountId) {
   const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   const campaigns = [];
-  let url = `/${accountId}/campaigns`;
-  let hasMore = true;
+  const token = await getGlobalToken();
+  let nextPageUrl = null;
 
-  while (hasMore) {
-    const response = await api.get(url, {
-      params: {
-        access_token: await getGlobalToken(),
-        fields:
-          'id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time,configured_status',
-        limit: 200,
-      },
-    });
+  do {
+    let response;
+
+    if (nextPageUrl) {
+      // Use the absolute URL from Meta's pagination directly.
+      // Do NOT pass it through api.get() because axios would prepend the baseURL
+      // (which already contains the API version) and create a double-version path
+      // like .../v25.0/v25.0/... resulting in a 404 error.
+      response = await axios.get(nextPageUrl, { timeout: 30000 });
+    } else {
+      response = await api.get(`/${accountId}/campaigns`, {
+        params: {
+          access_token: token,
+          fields:
+            'id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time,configured_status',
+          limit: 200,
+        },
+      });
+    }
 
     const data = response.data;
     if (data.data && Array.isArray(data.data)) {
       campaigns.push(...data.data);
     }
 
-    if (data.paging && data.paging.next) {
-      // Use the cursor-based next URL but keep access_token
-      const nextUrl = new URL(data.paging.next);
-      url = nextUrl.pathname + nextUrl.search;
-      hasMore = true;
-    } else {
-      hasMore = false;
-    }
+    nextPageUrl = data.paging?.next || null;
 
     // Respect rate limits
     const rl = parseRateLimit(response.headers);
@@ -184,7 +187,7 @@ async function getCampaigns(adAccountId) {
       logger.warn('Meta API rate limit critical, sleeping 5s');
       await sleep(5000);
     }
-  }
+  } while (nextPageUrl);
 
   return campaigns;
 }

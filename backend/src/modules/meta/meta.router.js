@@ -166,11 +166,20 @@ router.post('/:id/sync', async (req, res, next) => {
       return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
     }
 
-    syncAccount(req.params.id).catch((err) =>
-      logger.error('Manual sync failed', { metaAccountId: req.params.id, error: err.message })
-    );
-
-    return res.status(202).json({ message: 'Sincronização iniciada', metaAccountId: req.params.id });
+    try {
+      const result = await syncAccount(req.params.id);
+      return res.status(200).json({
+        message: 'Sincronização concluída',
+        metaAccountId: req.params.id,
+        synced: result.synced,
+        errors: result.errors,
+      });
+    } catch (syncErr) {
+      // Surface the real error (Meta API message or DB error) even in production
+      const detail = syncErr.response?.data?.error?.message || syncErr.message || 'Erro desconhecido';
+      logger.error('Manual sync failed', { metaAccountId: req.params.id, error: detail });
+      return res.status(500).json({ error: `Sincronização falhou: ${detail}`, code: 500 });
+    }
   } catch (err) {
     next(err);
   }
