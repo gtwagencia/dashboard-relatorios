@@ -786,6 +786,9 @@ function ClientsTab() {
   const [role, setRole] = useState('client');
   const [adding, setAdding] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [resetId, setResetId] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const { data: clientsData, isLoading, mutate } = useSWR(
     'admin-clients-tab',
@@ -822,6 +825,24 @@ function ClientsTab() {
       toast.error('Erro ao atualizar status.');
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function handleResetPassword() {
+    if (!resetPassword || resetPassword.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+    setResetting(true);
+    try {
+      await adminApi.updateClient(resetId!, { password: resetPassword });
+      toast.success('Senha redefinida com sucesso!');
+      setResetId(null);
+      setResetPassword('');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erro ao redefinir senha.');
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -915,44 +936,61 @@ function ClientsTab() {
         ) : (
           <div className="space-y-2">
             {clients.map((c: any) => (
-              <div
-                key={c.id}
-                className={clsx(
-                  'flex items-center justify-between p-3 border rounded-xl transition-all',
-                  c.isActive ? 'border-gray-100' : 'border-gray-100 opacity-60'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-bold shrink-0">
-                    {(c.name || '?').charAt(0).toUpperCase()}
+              <div key={c.id} className={clsx('border rounded-xl transition-all', c.isActive ? 'border-gray-100' : 'border-gray-100 opacity-60')}>
+                <div className="flex items-center justify-between p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-bold shrink-0">
+                      {(c.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                      <p className="text-xs text-gray-500">{c.email}</p>
+                    </div>
+                    <span className={clsx(
+                      'ml-2 px-2 py-0.5 rounded-full text-xs font-medium',
+                      c.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                    )}>
+                      {c.role === 'admin' ? 'Admin' : 'Cliente'}
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
-                    <p className="text-xs text-gray-500">{c.email}</p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => { setResetId(resetId === c.id ? null : c.id); setResetPassword(''); }}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      title="Redefinir senha"
+                    >
+                      Redefinir senha
+                    </button>
+                    <button
+                      onClick={() => handleToggle(c.id)}
+                      disabled={togglingId === c.id}
+                      className={clsx(
+                        'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
+                        c.isActive ? 'bg-green-500' : 'bg-gray-300'
+                      )}
+                      title={c.isActive ? 'Desativar' : 'Ativar'}
+                    >
+                      <span className={clsx('inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform', c.isActive ? 'translate-x-4' : 'translate-x-0.5')} />
+                    </button>
                   </div>
-                  <span className={clsx(
-                    'ml-2 px-2 py-0.5 rounded-full text-xs font-medium',
-                    c.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                  )}>
-                    {c.role === 'admin' ? 'Admin' : 'Cliente'}
-                  </span>
                 </div>
-                <button
-                  onClick={() => handleToggle(c.id)}
-                  disabled={togglingId === c.id}
-                  className={clsx(
-                    'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
-                    (c.isActive) ? 'bg-green-500' : 'bg-gray-300'
-                  )}
-                  title={(c.isActive) ? 'Desativar' : 'Ativar'}
-                >
-                  <span
-                    className={clsx(
-                      'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                      (c.isActive) ? 'translate-x-4' : 'translate-x-0.5'
-                    )}
-                  />
-                </button>
+                {resetId === c.id && (
+                  <div className="px-3 pb-3 flex items-center gap-2">
+                    <input
+                      type="password"
+                      value={resetPassword}
+                      onChange={(e) => setResetPassword(e.target.value)}
+                      placeholder="Nova senha (mín. 8 caracteres)"
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <Button variant="primary" size="sm" loading={resetting} onClick={handleResetPassword}>
+                      Salvar
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setResetId(null); setResetPassword(''); }} disabled={resetting}>
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
