@@ -2,7 +2,10 @@
 
 const { Router } = require('express');
 const { getCampaigns, getCampaignById, getCampaignMetrics, getCampaignAds } = require('./campaigns.service');
-const { authenticate } = require('../../middleware/auth');
+const { getAdCreative } = require('../meta/meta.service');
+const { query } = require('../../config/database');
+const { authenticate, requireAdmin } = require('../../middleware/auth');
+const logger = require('../../utils/logger');
 
 const router = Router();
 
@@ -78,6 +81,45 @@ router.get('/:id/metrics', async (req, res, next) => {
     );
 
     return res.status(200).json({ metrics });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/campaigns/:id/refresh-thumbnails
+ * Re-fetch creative thumbnails for all ads of a campaign. ADMIN ONLY.
+ * Useful after clearing thumbnails or when images fail to load.
+ */
+router.post('/:id/refresh-thumbnails', requireAdmin, async (req, res, next) => {
+  try {
+    const { rows: ads } = await query(
+      `SELECT id, ad_id FROM ads WHERE campaign_id = $1`,
+      [req.params.id]
+    );
+
+    if (ads.length === 0) {
+      return res.status(200).json({ message: 'Nenhum anúncio encontrado para esta campanha', updated: 0 });
+    }
+
+    let updated = 0;
+    const results = [];
+
+    for (const ad of ads) {
+      const { thumbnailUrl, creativeId } = await getAdCreative(ad.ad_id);
+      results.push({ adId: ad.ad_id, thumbnailUrl: thumbnailUrl ? '✓' : 'null' });
+
+      if (thumbnailUrl) {
+        await query(
+          `UPDATE ads SET thumbnail_url = $1, creative_id = $2, synced_at = NOW() WHERE id = $3`,
+          [thumbnailUrl, creativeId, ad.id]
+        );
+        updated++;
+      }
+    }
+
+    logger.info('Thumbnail refresh complete', { campaignId: req.params.id, total: ads.length, updated });
+    return res.status(200).json({ updated, total: ads.length, results });
   } catch (err) {
     next(err);
   }

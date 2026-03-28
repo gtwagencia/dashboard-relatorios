@@ -69,6 +69,7 @@ export default function CampaignDetailPage() {
   const router = useRouter();
   const [dateRange, setDateRange] = useState<DateRangeValue>('30d');
   const [generatingInsight, setGeneratingInsight] = useState(false);
+  const [refreshingThumbnails, setRefreshingThumbnails] = useState(false);
   const { from, to } = getDateRange(dateRange);
 
   const { data: campaign, isLoading: loadingCampaign } = useSWR<Campaign>(
@@ -90,10 +91,23 @@ export default function CampaignDetailPage() {
     () => aiApi.getInsights(id, 5).then((r) => r.data.insights)
   );
 
-  const { data: ads, isLoading: loadingAds } = useSWR<Ad[]>(
+  const { data: ads, isLoading: loadingAds, mutate: mutateAds } = useSWR<Ad[]>(
     id ? ['campaign-ads', id, from, to] : null,
     () => campaignsApi.getAds(id, from, to).then((r) => r.data.ads)
   );
+
+  async function handleRefreshThumbnails() {
+    setRefreshingThumbnails(true);
+    try {
+      const result = await campaignsApi.refreshThumbnails(id);
+      await mutateAds();
+      toast.success(`${result.data.updated} imagem(ns) atualizada(s)`);
+    } catch {
+      toast.error('Erro ao atualizar imagens. Tente novamente.');
+    } finally {
+      setRefreshingThumbnails(false);
+    }
+  }
 
   const aggregated = metrics?.reduce(
     (acc, m) => ({
@@ -270,7 +284,25 @@ export default function CampaignDetailPage() {
 
         {/* Ads Gallery — shows whenever there is at least one ad (including single-ad campaigns) */}
         {(loadingAds || (ads && ads.length > 0)) && (
-          <Card title="Anúncios" subtitle="Desempenho individual por anúncio no período selecionado">
+          <Card
+            title="Anúncios"
+            subtitle="Desempenho individual por anúncio no período selecionado"
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={refreshingThumbnails}
+                onClick={handleRefreshThumbnails}
+                icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                }
+              >
+                Atualizar imagens
+              </Button>
+            }
+          >
             {loadingAds ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -347,10 +379,36 @@ export default function CampaignDetailPage() {
                           </div>
                         )}
                         {ad.totalConversions > 0 && (
-                          <div>
-                            <p className="text-gray-400 mb-0.5">Conversões</p>
-                            <p className="font-semibold text-gray-700">{formatNumber(ad.totalConversions)}</p>
-                          </div>
+                          <>
+                            <div>
+                              <p className="text-gray-400 mb-0.5">Vendas</p>
+                              <p className="font-semibold text-gray-700">{formatNumber(ad.totalConversions)}</p>
+                            </div>
+                            {ad.totalConversionsValue > 0 && (
+                              <div>
+                                <p className="text-gray-400 mb-0.5">Faturamento</p>
+                                <p className="font-semibold text-green-600">{formatCurrency(ad.totalConversionsValue)}</p>
+                              </div>
+                            )}
+                            {ad.totalConversionsValue > 0 && ad.totalSpend > 0 && (
+                              <div className="col-span-2 mt-1 pt-2 border-t border-gray-100">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-gray-400">ROI</p>
+                                  <p className={`font-bold text-sm ${
+                                    (ad.totalConversionsValue / ad.totalSpend) >= 1
+                                      ? 'text-green-600'
+                                      : 'text-red-500'
+                                  }`}>
+                                    {(((ad.totalConversionsValue - ad.totalSpend) / ad.totalSpend) * 100).toFixed(0)}%
+                                    {' '}
+                                    <span className="text-xs font-normal text-gray-400">
+                                      ({(ad.totalConversionsValue / ad.totalSpend).toFixed(2)}x)
+                                    </span>
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </>
                         )}
                         <div>
                           <p className="text-gray-400 mb-0.5">CPC</p>

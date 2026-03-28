@@ -400,23 +400,47 @@ function normaliseInsight(insight) {
  * @param {string} adId - Meta ad ID
  * @returns {Promise<{ thumbnailUrl: string|null, creativeId: string|null }>}
  */
+/**
+ * Fetch ad creative thumbnail URL.
+ * Tries multiple field combinations to maximise compatibility across ad types.
+ * @param {string} adId - Meta ad ID
+ * @returns {Promise<{ thumbnailUrl: string|null, creativeId: string|null }>}
+ */
 async function getAdCreative(adId) {
+  const token = await getGlobalToken();
   try {
-    const response = await api.get(`/${adId}`, {
+    // Primary: fetch via /adcreatives edge (more reliable across ad types)
+    const creativeRes = await api.get(`/${adId}/adcreatives`, {
       params: {
-        access_token: await getGlobalToken(),
-        // image_url is full-resolution; thumbnail_url is low-res video preview fallback
-        fields: 'creative{image_url,thumbnail_url,picture,id}',
+        access_token: token,
+        fields: 'id,thumbnail_url,image_url,picture',
+        limit: 1,
       },
     });
-    const creative = response.data.creative;
+
+    const creatives = creativeRes.data?.data || [];
+    if (creatives.length > 0) {
+      const c = creatives[0];
+      const thumbnailUrl = c.image_url || c.picture || c.thumbnail_url || null;
+      logger.debug('Ad creative fetched via adcreatives edge', { adId, thumbnailUrl: !!thumbnailUrl, fields: Object.keys(c) });
+      if (thumbnailUrl) {
+        return { thumbnailUrl, creativeId: c.id || null };
+      }
+    }
+
+    // Fallback: fetch creative nested in the ad object
+    const adRes = await api.get(`/${adId}`, {
+      params: {
+        access_token: token,
+        fields: 'creative{id,thumbnail_url,image_url,picture}',
+      },
+    });
+    const creative = adRes.data?.creative;
     if (!creative) return { thumbnailUrl: null, creativeId: null };
-    // Prefer full-resolution image_url; fall back to picture, then thumbnail_url
+
     const thumbnailUrl = creative.image_url || creative.picture || creative.thumbnail_url || null;
-    return {
-      thumbnailUrl,
-      creativeId: creative.id || null,
-    };
+    logger.debug('Ad creative fetched via ad object', { adId, thumbnailUrl: !!thumbnailUrl });
+    return { thumbnailUrl, creativeId: creative.id || null };
   } catch (err) {
     logger.warn('Failed to fetch ad creative', { adId, error: err.message });
     return { thumbnailUrl: null, creativeId: null };

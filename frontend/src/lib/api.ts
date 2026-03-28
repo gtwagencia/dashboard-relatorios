@@ -111,6 +111,11 @@ export const campaignsApi = {
     api.get<{ ads: Ad[] }>(`/campaigns/${id}/ads`, {
       params: { ...(from ? { dateFrom: from } : {}), ...(to ? { dateTo: to } : {}) },
     }),
+
+  refreshThumbnails: (id: string) =>
+    api.post<{ updated: number; total: number; results: Array<{ adId: string; thumbnailUrl: string }> }>(
+      `/campaigns/${id}/refresh-thumbnails`
+    ),
 };
 
 // Reports API
