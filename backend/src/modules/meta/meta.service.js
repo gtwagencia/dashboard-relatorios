@@ -405,13 +405,16 @@ async function getAdCreative(adId) {
     const response = await api.get(`/${adId}`, {
       params: {
         access_token: await getGlobalToken(),
-        fields: 'creative{thumbnail_url,image_url,id}',
+        // image_url is full-resolution; thumbnail_url is low-res video preview fallback
+        fields: 'creative{image_url,thumbnail_url,picture,id}',
       },
     });
     const creative = response.data.creative;
     if (!creative) return { thumbnailUrl: null, creativeId: null };
+    // Prefer full-resolution image_url; fall back to picture, then thumbnail_url
+    const thumbnailUrl = creative.image_url || creative.picture || creative.thumbnail_url || null;
     return {
-      thumbnailUrl: creative.thumbnail_url || creative.image_url || null,
+      thumbnailUrl,
       creativeId: creative.id || null,
     };
   } catch (err) {

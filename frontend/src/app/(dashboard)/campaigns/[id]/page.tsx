@@ -289,13 +289,13 @@ export default function CampaignDetailPage() {
                     className="border border-gray-100 rounded-xl overflow-hidden hover:border-blue-200 hover:shadow-sm transition-all"
                   >
                     {/* Thumbnail */}
-                    <div className="relative w-full h-44 bg-gray-100">
+                    <div className="relative w-full h-48 bg-gray-900">
                       {ad.thumbnailUrl ? (
                         <Image
                           src={ad.thumbnailUrl}
                           alt={ad.name}
                           fill
-                          className="object-cover"
+                          className="object-contain"
                           unoptimized
                         />
                       ) : (
