@@ -154,9 +154,28 @@ export interface MessageTemplate {
   name: string;
   headerBlock: string;
   campaignBlock: string;
+  adBlock: string;
   summaryBlock: string;
   isActive: boolean;
   updatedAt: string;
+}
+
+export interface Ad {
+  id: string;
+  adId: string;
+  name: string;
+  status: string;
+  thumbnailUrl: string | null;
+  creativeId: string | null;
+  totalSpend: number;
+  totalImpressions: number;
+  totalClicks: number;
+  totalLeads: number;
+  totalConversions: number;
+  totalConversionsValue: number;
+  avgCtr: number;
+  avgCpc: number;
+  avgCpm: number;
 }
 
 export interface ClientWhatsAppConfig {

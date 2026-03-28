@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { subDays, format } from 'date-fns';
+import Image from 'next/image';
 import { campaignsApi, aiApi } from '@/lib/api';
 import {
   formatCurrency,
@@ -21,7 +22,7 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import SpendLineChart from '@/components/charts/SpendLineChart';
 import CtrCpcChart from '@/components/charts/CtrCpcChart';
-import { Campaign, CampaignMetrics, AiInsight } from '@/types';
+import { Campaign, CampaignMetrics, AiInsight, Ad } from '@/types';
 import toast from 'react-hot-toast';
 
 function getDateRange(range: DateRangeValue): { from: string; to: string } {
@@ -87,6 +88,11 @@ export default function CampaignDetailPage() {
   } = useSWR<AiInsight[]>(
     id ? ['ai-insights', id] : null,
     () => aiApi.getInsights(id, 5).then((r) => r.data.insights)
+  );
+
+  const { data: ads, isLoading: loadingAds } = useSWR<Ad[]>(
+    id ? ['campaign-ads', id, from, to] : null,
+    () => campaignsApi.getAds(id, from, to).then((r) => r.data.ads)
   );
 
   const aggregated = metrics?.reduce(
@@ -261,6 +267,107 @@ export default function CampaignDetailPage() {
             )}
           </Card>
         </div>
+
+        {/* Ads Gallery — shows whenever there is at least one ad (including single-ad campaigns) */}
+        {(loadingAds || (ads && ads.length > 0)) && (
+          <Card title="Anúncios" subtitle="Desempenho individual por anúncio no período selecionado">
+            {loadingAds ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="border border-gray-100 rounded-xl p-4 animate-pulse">
+                    <div className="w-full h-40 bg-gray-200 rounded-lg mb-3" />
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-100 rounded w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {ads!.map((ad) => (
+                  <div
+                    key={ad.id}
+                    className="border border-gray-100 rounded-xl overflow-hidden hover:border-blue-200 hover:shadow-sm transition-all"
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative w-full h-44 bg-gray-100">
+                      {ad.thumbnailUrl ? (
+                        <Image
+                          src={ad.thumbnailUrl}
+                          alt={ad.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 20.25h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12.75c0 .828.672 1.5 1.5 1.5z" />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            ad.status === 'ACTIVE'
+                              ? 'bg-green-100 text-green-700'
+                              : ad.status === 'PAUSED'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {ad.status === 'ACTIVE' ? 'Ativo' : ad.status === 'PAUSED' ? 'Pausado' : ad.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-4">
+                      <p className="text-sm font-semibold text-gray-800 mb-3 line-clamp-2 leading-snug">{ad.name}</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div>
+                          <p className="text-gray-400 mb-0.5">Investimento</p>
+                          <p className="font-semibold text-gray-700">{formatCurrency(ad.totalSpend)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 mb-0.5">Impressões</p>
+                          <p className="font-semibold text-gray-700">{formatNumber(ad.totalImpressions)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 mb-0.5">Cliques</p>
+                          <p className="font-semibold text-gray-700">{formatNumber(ad.totalClicks)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 mb-0.5">CTR</p>
+                          <p className="font-semibold text-gray-700">{formatPercent(ad.avgCtr)}</p>
+                        </div>
+                        {ad.totalLeads > 0 && (
+                          <div>
+                            <p className="text-gray-400 mb-0.5">Leads</p>
+                            <p className="font-semibold text-gray-700">{formatNumber(ad.totalLeads)}</p>
+                          </div>
+                        )}
+                        {ad.totalConversions > 0 && (
+                          <div>
+                            <p className="text-gray-400 mb-0.5">Conversões</p>
+                            <p className="font-semibold text-gray-700">{formatNumber(ad.totalConversions)}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-gray-400 mb-0.5">CPC</p>
+                          <p className="font-semibold text-gray-700">{formatCurrency(ad.avgCpc)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 mb-0.5">CPM</p>
+                          <p className="font-semibold text-gray-700">{formatCurrency(ad.avgCpm)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* AI Insights */}
         <Card

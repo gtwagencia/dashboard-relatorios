@@ -394,6 +394,89 @@ function normaliseInsight(insight) {
   };
 }
 
+/**
+ * Fetch ad creative thumbnail URL.
+ * Returns thumbnail_url and creative_id, or nulls when not available.
+ * @param {string} adId - Meta ad ID
+ * @returns {Promise<{ thumbnailUrl: string|null, creativeId: string|null }>}
+ */
+async function getAdCreative(adId) {
+  try {
+    const response = await api.get(`/${adId}`, {
+      params: {
+        access_token: await getGlobalToken(),
+        fields: 'creative{thumbnail_url,image_url,id}',
+      },
+    });
+    const creative = response.data.creative;
+    if (!creative) return { thumbnailUrl: null, creativeId: null };
+    return {
+      thumbnailUrl: creative.thumbnail_url || creative.image_url || null,
+      creativeId: creative.id || null,
+    };
+  } catch (err) {
+    logger.warn('Failed to fetch ad creative', { adId, error: err.message });
+    return { thumbnailUrl: null, creativeId: null };
+  }
+}
+
+/**
+ * Get all ads for a campaign (id, name, status only — no insights).
+ * Used to check how many active ads a campaign has before deciding to sync ad-level data.
+ * @param {string} campaignId - Meta campaign ID (numeric string)
+ * @returns {Promise<object[]>}
+ */
+async function getAdsForCampaign(campaignId) {
+  const response = await api.get(`/${campaignId}/ads`, {
+    params: {
+      access_token: await getGlobalToken(),
+      fields: 'id,name,status,configured_status',
+      limit: 200,
+    },
+  });
+
+  const rl = parseRateLimit(response.headers);
+  if (rl && rl.remaining < 5) {
+    logger.warn('Meta API rate limit critical, sleeping 5s');
+    await sleep(5000);
+  }
+
+  return response.data.data || [];
+}
+
+/**
+ * Get insights for a specific ad.
+ * Identical signature to getCampaignInsights but targets the ad endpoint.
+ * @param {string} adId
+ * @param {string|null} [datePreset]
+ * @param {{ since: string, until: string } | null} [dateRange]
+ * @returns {Promise<object[]>}
+ */
+async function getAdInsights(adId, datePreset = 'last_30d', dateRange = null) {
+  const params = {
+    access_token: await getGlobalToken(),
+    fields: INSIGHT_FIELDS,
+    time_increment: 1,
+    limit: 100,
+  };
+
+  if (dateRange && dateRange.since && dateRange.until) {
+    params.time_range = JSON.stringify({ since: dateRange.since, until: dateRange.until });
+  } else {
+    params.date_preset = datePreset;
+  }
+
+  const response = await api.get(`/${adId}/insights`, { params });
+
+  const rl = parseRateLimit(response.headers);
+  if (rl && rl.remaining < 5) {
+    logger.warn('Meta API rate limit critical, sleeping 5s');
+    await sleep(5000);
+  }
+
+  return response.data.data || [];
+}
+
 module.exports = {
   META_API_VERSION,
   BASE_URL,
@@ -402,6 +485,9 @@ module.exports = {
   getAdAccounts,
   getCampaigns,
   getCampaignInsights,
+  getAdsForCampaign,
+  getAdInsights,
+  getAdCreative,
   getAccountInsights,
   getAccountBalance,
   normaliseInsight,

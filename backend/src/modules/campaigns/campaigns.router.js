@@ -1,7 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
-const campaignsService = require('./campaigns.service');
+const { getCampaigns, getCampaignById, getCampaignMetrics, getCampaignAds } = require('./campaigns.service');
 const { authenticate } = require('../../middleware/auth');
 
 const router = Router();
@@ -20,9 +20,27 @@ router.get('/', async (req, res, next) => {
     const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const { objective, status, search, page, limit, metaAccountId, dateFrom, dateTo } = req.query;
 
-    const result = await campaignsService.getCampaigns(clientId, { objective, status, search, page, limit, metaAccountId, dateFrom, dateTo });
+    const result = await getCampaigns(clientId, { objective, status, search, page, limit, metaAccountId, dateFrom, dateTo });
 
     return res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/campaigns/:id/ads
+ * Get all ads for a campaign with aggregated metrics.
+ * Query params: dateFrom (YYYY-MM-DD), dateTo (YYYY-MM-DD)
+ */
+router.get('/:id/ads', async (req, res, next) => {
+  try {
+    const clientId = req.user.role === 'admin' ? null : req.user.clientId;
+    const { dateFrom, dateTo } = req.query;
+
+    const ads = await getCampaignAds(clientId, req.params.id, dateFrom, dateTo);
+
+    return res.status(200).json({ ads });
   } catch (err) {
     next(err);
   }
@@ -35,7 +53,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const clientId = req.user.role === 'admin' ? null : req.user.clientId;
-    const campaign = await campaignsService.getCampaignById(clientId, req.params.id);
+    const campaign = await getCampaignById(clientId, req.params.id);
     return res.status(200).json({ campaign });
   } catch (err) {
     next(err);
@@ -52,7 +70,7 @@ router.get('/:id/metrics', async (req, res, next) => {
     const clientId = req.user.role === 'admin' ? null : req.user.clientId;
     const { dateFrom, dateTo } = req.query;
 
-    const metrics = await campaignsService.getCampaignMetrics(
+    const metrics = await getCampaignMetrics(
       clientId,
       req.params.id,
       dateFrom,

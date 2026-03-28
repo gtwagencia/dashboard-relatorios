@@ -55,12 +55,32 @@ function computeSummary(metrics) {
 }
 
 /**
+ * Format an ad row into report-friendly shape.
+ */
+function formatAd(a) {
+  return {
+    id: a.ad_id || a.id,
+    name: a.ad_name || a.name,
+    spend: Math.round(parseFloat(a.total_spend || a.spend || 0) * 100) / 100,
+    leads: parseInt(a.total_leads || a.leads || 0, 10),
+    conversions: parseInt(a.total_conversions || a.conversions || 0, 10),
+    conversions_value: parseFloat(a.total_conversions_value || a.conversions_value || 0),
+    ctr: parseFloat(a.avg_ctr || a.ctr || 0),
+    cpc: parseFloat(a.avg_cpc || a.cpc || 0),
+    cpm: parseFloat(a.avg_cpm || a.cpm || 0),
+    impressions: parseInt(a.total_impressions || a.impressions || 0, 10),
+    clicks: parseInt(a.total_clicks || a.clicks || 0, 10),
+  };
+}
+
+/**
  * Format a campaign row into report-friendly shape.
- * @param {object} c - Campaign row with aggregated metrics
+ * When the campaign has multiple active ads, includes an `ads` array.
+ * @param {object} c - Campaign row with aggregated metrics (+ optional c.ads array)
  * @returns {object}
  */
 function formatCampaign(c) {
-  return {
+  const base = {
     id: c.campaign_id || c.id,
     name: c.name,
     objective: c.objective,
@@ -75,6 +95,10 @@ function formatCampaign(c) {
     impressions: parseInt(c.total_impressions || c.impressions || 0, 10),
     clicks: parseInt(c.total_clicks || c.clicks || 0, 10),
   };
+  if (c.ads && c.ads.length > 1) {
+    base.ads = c.ads.map(formatAd);
+  }
+  return base;
 }
 
 /**

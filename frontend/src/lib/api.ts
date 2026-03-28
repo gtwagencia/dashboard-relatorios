@@ -14,6 +14,7 @@ import {
   SystemSetting,
   MessageTemplate,
   ClientWhatsAppConfig,
+  Ad,
 } from '@/types';
 
 const api: AxiosInstance = axios.create({
@@ -105,6 +106,11 @@ export const campaignsApi = {
 
   getMetrics: (id: string, from: string, to: string) =>
     api.get<{ metrics: CampaignMetrics[] }>(`/campaigns/${id}/metrics`, { params: { dateFrom: from, dateTo: to } }),
+
+  getAds: (id: string, from?: string, to?: string) =>
+    api.get<{ ads: Ad[] }>(`/campaigns/${id}/ads`, {
+      params: { ...(from ? { dateFrom: from } : {}), ...(to ? { dateTo: to } : {}) },
+    }),
 };
 
 // Reports API
@@ -197,6 +203,7 @@ export const notificationsApi = {
       name: data.name,
       headerBlock: data.headerBlock,
       campaignBlock: data.campaignBlock,
+      adBlock: data.adBlock,
       summaryBlock: data.summaryBlock,
       isActive: data.isActive,
     }),

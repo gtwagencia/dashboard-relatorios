@@ -1,7 +1,7 @@
 'use strict';
 
 const { query } = require('../../config/database');
-const { getCampaigns, getCampaignInsights, normaliseInsight, OBJECTIVE_MAP } = require('./meta.service');
+const { getCampaigns, getCampaignInsights, getAdsForCampaign, getAdInsights, getAdCreative, normaliseInsight, OBJECTIVE_MAP } = require('./meta.service');
 const logger = require('../../utils/logger');
 
 // Tracks which account UUIDs are currently being synced.
@@ -126,6 +126,152 @@ async function batchUpsertMetrics(internalCampaignId, metricsList) {
 }
 
 /**
+ * Upsert an ad row and return internal UUID.
+ * @param {string} internalCampaignId
+ * @param {object} ad - ad from Meta API (may have thumbnailUrl / creativeId already fetched)
+ */
+async function upsertAd(internalCampaignId, ad) {
+  const { rows } = await query(
+    `INSERT INTO ads (campaign_id, ad_id, name, status, thumbnail_url, creative_id, synced_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (ad_id) DO UPDATE SET
+       name          = EXCLUDED.name,
+       status        = EXCLUDED.status,
+       thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, ads.thumbnail_url),
+       creative_id   = COALESCE(EXCLUDED.creative_id,   ads.creative_id),
+       synced_at     = NOW()
+     RETURNING id`,
+    [internalCampaignId, ad.id, ad.name, ad.status || ad.configured_status || 'UNKNOWN', ad.thumbnailUrl || null, ad.creativeId || null]
+  );
+  return rows[0].id;
+}
+
+/**
+ * Batch upsert ad metrics (same structure as batchUpsertMetrics but for ad_metrics table).
+ */
+async function batchUpsertAdMetrics(internalAdId, metricsList) {
+  if (metricsList.length === 0) return;
+
+  const params = [];
+  const valueClauses = metricsList.map((metrics) => {
+    const base = params.length + 1;
+    params.push(
+      internalAdId,
+      metrics.date_start,
+      metrics.date_stop,
+      metrics.impressions,
+      metrics.reach,
+      metrics.clicks,
+      metrics.spend,
+      metrics.ctr,
+      metrics.cpc,
+      metrics.cpm,
+      metrics.conversions,
+      metrics.leads,
+      metrics.conversions_value || 0,
+      JSON.stringify(metrics.raw_json)
+    );
+    return `($${base},$${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13})`;
+  });
+
+  await query(
+    `INSERT INTO ad_metrics
+       (ad_id, date_start, date_stop, impressions, reach, clicks, spend,
+        ctr, cpc, cpm, conversions, leads, conversions_value, raw_json)
+     VALUES ${valueClauses.join(', ')}
+     ON CONFLICT (ad_id, date_start) DO UPDATE SET
+       date_stop         = EXCLUDED.date_stop,
+       impressions       = EXCLUDED.impressions,
+       reach             = EXCLUDED.reach,
+       clicks            = EXCLUDED.clicks,
+       spend             = EXCLUDED.spend,
+       ctr               = EXCLUDED.ctr,
+       cpc               = EXCLUDED.cpc,
+       cpm               = EXCLUDED.cpm,
+       conversions       = EXCLUDED.conversions,
+       leads             = EXCLUDED.leads,
+       conversions_value = EXCLUDED.conversions_value,
+       raw_json          = EXCLUDED.raw_json`,
+    params
+  );
+}
+
+/**
+ * Sync ads for a single campaign (incremental).
+ * Only runs when the campaign has >1 active/paused ad — if there's only one,
+ * the campaign-level metrics already represent it.
+ */
+async function syncCampaignAds(internalCampaignId, metaCampaignId, yesterdayStr) {
+  let ads;
+  try {
+    ads = await getAdsForCampaign(metaCampaignId);
+  } catch (err) {
+    logger.warn('Failed to fetch ads for campaign', { metaCampaignId, error: err.message });
+    return;
+  }
+
+  const activeStatuses = ['ACTIVE', 'PAUSED'];
+  const syncableAds = ads.filter(a =>
+    activeStatuses.includes((a.status || a.configured_status || '').toUpperCase())
+  );
+
+  // Always upsert ad rows with thumbnails (even single-ad campaigns need the image)
+  for (const ad of syncableAds) {
+    try {
+      // Fetch creative thumbnail if not yet stored
+      const { rows: existingAd } = await query(
+        `SELECT id, thumbnail_url FROM ads WHERE ad_id = $1`,
+        [ad.id]
+      );
+      let thumbnailUrl = existingAd[0]?.thumbnail_url || null;
+      let creativeId = null;
+      if (!thumbnailUrl) {
+        const creative = await getAdCreative(ad.id);
+        thumbnailUrl = creative.thumbnailUrl;
+        creativeId = creative.creativeId;
+      }
+      ad._internalId = await upsertAd(internalCampaignId, { ...ad, thumbnailUrl, creativeId });
+    } catch (err) {
+      logger.error('Error upserting ad', { adId: ad.id, error: err.message });
+    }
+  }
+
+  // Only fetch ad-level metrics when there are multiple active ads
+  // (single-ad campaigns: campaign metrics already represent the one ad)
+  if (syncableAds.length <= 1) return;
+
+  for (const ad of syncableAds) {
+    try {
+      const internalAdId = ad._internalId;
+      if (!internalAdId) continue;
+
+      const { rows: latestRows } = await query(
+        `SELECT MAX(date_start) AS latest FROM ad_metrics WHERE ad_id = $1`,
+        [internalAdId]
+      );
+      const latestStored = latestRows[0]?.latest;
+
+      let insights;
+      if (!latestStored) {
+        insights = await getAdInsights(ad.id, 'last_30d');
+      } else {
+        if (latestStored >= yesterdayStr) continue;
+        const sinceDate = new Date(latestStored);
+        sinceDate.setUTCDate(sinceDate.getUTCDate() - 2);
+        const since = sinceDate.toISOString().slice(0, 10);
+        insights = await getAdInsights(ad.id, null, { since, until: yesterdayStr });
+      }
+
+      if (insights.length > 0) {
+        await batchUpsertAdMetrics(internalAdId, insights.map(normaliseInsight));
+      }
+    } catch (err) {
+      logger.error('Error syncing ad metrics', { adId: ad.id, error: err.message });
+    }
+  }
+}
+
+/**
  * Synchronise a single Meta account: fetch campaigns + insights and persist.
  * @param {string} metaAccountId - Internal UUID of meta_accounts row
  * @returns {Promise<{ synced: number, errors: number }>}
@@ -217,6 +363,9 @@ async function syncAccount(metaAccountId) {
             const metricsList = insights.map(normaliseInsight);
             await batchUpsertMetrics(internalId, metricsList);
           }
+
+          // Sync ad-level data (only when campaign has >1 active ad)
+          await syncCampaignAds(internalId, campaign.id, yesterdayStr);
         }
 
         synced++;

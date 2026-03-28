@@ -301,4 +301,93 @@ async function getCampaignMetrics(clientId, campaignId, dateFrom, dateTo) {
   }));
 }
 
-module.exports = { getCampaigns, getCampaignById, getCampaignMetrics };
+/**
+ * Get all ads for a campaign with aggregated metrics over a date range.
+ * @param {string} clientId    - null for admin
+ * @param {string} campaignId  - Internal UUID
+ * @param {string} [dateFrom]  - YYYY-MM-DD
+ * @param {string} [dateTo]    - YYYY-MM-DD
+ * @returns {Promise<object[]>}
+ */
+async function getCampaignAds(clientId, campaignId, dateFrom, dateTo) {
+  // Verify ownership or shared access (skip check for admin: clientId null)
+  if (clientId) {
+    const { rows: ownership } = await query(
+      `SELECT c.id
+       FROM campaigns c
+       JOIN meta_accounts ma ON ma.id = c.meta_account_id
+       WHERE c.id = $1
+         AND (ma.client_id = $2 OR EXISTS (SELECT 1 FROM meta_account_shares s WHERE s.meta_account_id = ma.id AND s.client_id = $2))`,
+      [campaignId, clientId]
+    );
+    if (ownership.length === 0) {
+      const err = new Error('Campaign not found');
+      err.statusCode = 404;
+      throw err;
+    }
+  }
+
+  const params = [campaignId];
+  let paramIdx = 2;
+  const dateConditions = [];
+  if (dateFrom) {
+    dateConditions.push(`AND am.date_start >= $${paramIdx++}`);
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    dateConditions.push(`AND am.date_stop <= $${paramIdx++}`);
+    params.push(dateTo);
+  }
+  const dateClause = dateConditions.join(' ');
+
+  const { rows } = await query(
+    `SELECT
+       a.id,
+       a.ad_id,
+       a.name,
+       a.status,
+       a.thumbnail_url,
+       a.creative_id,
+       COALESCE(SUM(am.spend), 0)::NUMERIC(14,2)       AS total_spend,
+       COALESCE(SUM(am.impressions), 0)::BIGINT         AS total_impressions,
+       COALESCE(SUM(am.clicks), 0)::INT                 AS total_clicks,
+       COALESCE(SUM(am.leads), 0)::INT                  AS total_leads,
+       COALESCE(SUM(am.conversions), 0)::INT            AS total_conversions,
+       COALESCE(SUM(am.conversions_value), 0)::NUMERIC(14,2) AS total_conversions_value,
+       CASE WHEN SUM(am.impressions) > 0
+            THEN (SUM(am.clicks)::FLOAT / SUM(am.impressions) * 100)
+            ELSE 0 END::NUMERIC(8,4)                    AS avg_ctr,
+       CASE WHEN SUM(am.clicks) > 0
+            THEN (SUM(am.spend) / SUM(am.clicks))
+            ELSE 0 END::NUMERIC(10,4)                   AS avg_cpc,
+       CASE WHEN SUM(am.impressions) > 0
+            THEN (SUM(am.spend) / SUM(am.impressions) * 1000)
+            ELSE 0 END::NUMERIC(10,4)                   AS avg_cpm
+     FROM ads a
+     LEFT JOIN ad_metrics am ON am.ad_id = a.id ${dateClause}
+     WHERE a.campaign_id = $1
+     GROUP BY a.id
+     ORDER BY total_spend DESC`,
+    params
+  );
+
+  return rows.map((a) => ({
+    id: a.id,
+    adId: a.ad_id,
+    name: a.name,
+    status: a.status,
+    thumbnailUrl: a.thumbnail_url || null,
+    creativeId: a.creative_id || null,
+    totalSpend: Number(a.total_spend),
+    totalImpressions: Number(a.total_impressions),
+    totalClicks: Number(a.total_clicks),
+    totalLeads: Number(a.total_leads),
+    totalConversions: Number(a.total_conversions),
+    totalConversionsValue: Number(a.total_conversions_value),
+    avgCtr: Number(a.avg_ctr),
+    avgCpc: Number(a.avg_cpc),
+    avgCpm: Number(a.avg_cpm),
+  }));
+}
+
+module.exports = { getCampaigns, getCampaignById, getCampaignMetrics, getCampaignAds };

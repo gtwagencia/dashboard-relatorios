@@ -6,7 +6,7 @@ const OBJECTIVES = ['leads', 'sales', 'engagement', 'awareness', 'traffic'];
 
 async function listTemplates() {
   const { rows } = await query(
-    `SELECT id, objective, name, header_block, campaign_block, summary_block, is_active, updated_at
+    `SELECT id, objective, name, header_block, campaign_block, ad_block, summary_block, is_active, updated_at
      FROM message_templates ORDER BY objective`
   );
   return rows;
@@ -14,31 +14,32 @@ async function listTemplates() {
 
 async function getTemplate(objective) {
   const { rows } = await query(
-    `SELECT id, objective, name, header_block, campaign_block, summary_block, is_active
+    `SELECT id, objective, name, header_block, campaign_block, ad_block, summary_block, is_active
      FROM message_templates WHERE objective = $1`,
     [objective]
   );
   return rows[0] || null;
 }
 
-async function upsertTemplate(objective, { name, headerBlock, campaignBlock, summaryBlock, isActive }) {
+async function upsertTemplate(objective, { name, headerBlock, campaignBlock, adBlock, summaryBlock, isActive }) {
   if (!OBJECTIVES.includes(objective)) {
     const err = new Error(`Objetivo inválido: ${objective}`);
     err.statusCode = 400;
     throw err;
   }
   const { rows } = await query(
-    `INSERT INTO message_templates (objective, name, header_block, campaign_block, summary_block, is_active, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `INSERT INTO message_templates (objective, name, header_block, campaign_block, ad_block, summary_block, is_active, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
      ON CONFLICT (objective) DO UPDATE SET
        name           = EXCLUDED.name,
        header_block   = EXCLUDED.header_block,
        campaign_block = EXCLUDED.campaign_block,
+       ad_block       = EXCLUDED.ad_block,
        summary_block  = EXCLUDED.summary_block,
        is_active      = EXCLUDED.is_active,
        updated_at     = NOW()
      RETURNING *`,
-    [objective, name, headerBlock, campaignBlock, summaryBlock, isActive ?? true]
+    [objective, name, headerBlock, campaignBlock, adBlock ?? '', summaryBlock, isActive ?? true]
   );
   return rows[0];
 }
@@ -91,8 +92,26 @@ function renderMessage(template, { clientName, reportType, periodStart, periodEn
 
   const header = substituteVars(template.header_block, globalVars);
 
+  function buildAdVars(a, adIndex) {
+    return {
+      indice_anuncio: String(adIndex + 1),
+      nome_anuncio:   a.name,
+      leads:          fmtNumber(a.leads),
+      custo_lead:     fmtCurrency(a.leads > 0 ? a.spend / a.leads : 0),
+      cliques:        fmtNumber(a.clicks),
+      investimento:   fmtCurrency(a.spend),
+      vendas:         fmtNumber(a.conversions),
+      custo_venda:    fmtCurrency(a.conversions > 0 ? a.spend / a.conversions : 0),
+      valor_vendas:   fmtCurrency(a.conversions_value || 0),
+      impressoes:     fmtNumber(a.impressions),
+      ctr:            fmtPercent(a.ctr),
+      cpm:            fmtCurrency(a.cpm),
+      cpc:            fmtCurrency(a.cpc),
+    };
+  }
+
   const campaignBlocks = campaigns.map((c, i) => {
-    const vars = {
+    const campaignVars = {
       indice:          String(i + 1),
       nome_campanha:   c.name,
       leads:           fmtNumber(c.leads),
@@ -107,7 +126,18 @@ function renderMessage(template, { clientName, reportType, periodStart, periodEn
       cpm:             fmtCurrency(c.cpm),
       cpc:             fmtCurrency(c.cpc),
     };
-    return substituteVars(template.campaign_block, vars);
+
+    const campaignHeader = substituteVars(template.campaign_block, campaignVars);
+
+    // When campaign has multiple ads, append individual ad blocks below campaign header
+    if (c.ads && c.ads.length > 1 && template.ad_block) {
+      const adLines = c.ads.map((a, ai) =>
+        substituteVars(template.ad_block, buildAdVars(a, ai))
+      );
+      return campaignHeader + '\n' + adLines.join('\n');
+    }
+
+    return campaignHeader;
   });
 
   const summary_block = substituteVars(template.summary_block, globalVars);

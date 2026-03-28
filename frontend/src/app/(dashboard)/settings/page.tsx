@@ -1278,6 +1278,12 @@ const CAMPAIGN_VARS = [
   '{{impressoes}}', '{{ctr}}', '{{cpm}}',
 ];
 
+const AD_VARS = [
+  '{{indice_anuncio}}', '{{nome_anuncio}}', '{{leads}}', '{{custo_lead}}', '{{cliques}}',
+  '{{investimento}}', '{{vendas}}', '{{custo_venda}}', '{{valor_vendas}}',
+  '{{impressoes}}', '{{ctr}}', '{{cpm}}',
+];
+
 function TemplateEditor({ objective, template, onSaved }: {
   objective: string;
   template: MessageTemplate | undefined;
@@ -1286,6 +1292,7 @@ function TemplateEditor({ objective, template, onSaved }: {
   const [name, setName] = useState(template?.name ?? `Padrão - ${objective}`);
   const [headerBlock, setHeaderBlock] = useState(template?.headerBlock ?? '');
   const [campaignBlock, setCampaignBlock] = useState(template?.campaignBlock ?? '');
+  const [adBlock, setAdBlock] = useState(template?.adBlock ?? '');
   const [summaryBlock, setSummaryBlock] = useState(template?.summaryBlock ?? '');
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [saving, setSaving] = useState(false);
@@ -1296,6 +1303,7 @@ function TemplateEditor({ objective, template, onSaved }: {
       setName(template.name);
       setHeaderBlock(template.headerBlock);
       setCampaignBlock(template.campaignBlock);
+      setAdBlock(template.adBlock ?? '');
       setSummaryBlock(template.summaryBlock);
       setIsActive(template.isActive);
     }
@@ -1305,7 +1313,7 @@ function TemplateEditor({ objective, template, onSaved }: {
     if (!name.trim()) { toast.error('Nome do template é obrigatório.'); return; }
     setSaving(true);
     try {
-      await notificationsApi.upsertTemplate(objective, { name, headerBlock, campaignBlock, summaryBlock, isActive });
+      await notificationsApi.upsertTemplate(objective, { name, headerBlock, campaignBlock, adBlock, summaryBlock, isActive });
       toast.success('Template salvo!');
       onSaved();
     } catch (err: any) {
@@ -1373,11 +1381,19 @@ function TemplateEditor({ objective, template, onSaved }: {
                 ))}
               </div>
             </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Bloco de Anúncio <span className="text-gray-400 font-normal normal-case">(usado quando campanha tem &gt;1 anúncio ativo)</span></p>
+              <div className="flex flex-wrap gap-1">
+                {AD_VARS.map((v) => (
+                  <code key={v} className="text-xs bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono">{v}</code>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Header
@@ -1386,22 +1402,9 @@ function TemplateEditor({ objective, template, onSaved }: {
           <textarea
             value={headerBlock}
             onChange={(e) => setHeaderBlock(e.target.value)}
-            rows={6}
+            rows={5}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
             placeholder="*CLIENTE: {{nome_cliente}}*&#10;&#10;📊 *DADOS META ADS {{periodo}}*"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Bloco de Campanha
-            <span className="ml-1 text-gray-400 font-normal">(repetido por campanha)</span>
-          </label>
-          <textarea
-            value={campaignBlock}
-            onChange={(e) => setCampaignBlock(e.target.value)}
-            rows={6}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
-            placeholder="🟢 *Campanha {{indice}}*:&#10;📌 Nome: {{nome_campanha}}"
           />
         </div>
         <div>
@@ -1412,9 +1415,35 @@ function TemplateEditor({ objective, template, onSaved }: {
           <textarea
             value={summaryBlock}
             onChange={(e) => setSummaryBlock(e.target.value)}
-            rows={6}
+            rows={5}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
             placeholder="📈 *RESUMO TOTAL*&#10;🏦 Total Investido: {{total_investido}}"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Bloco de Campanha
+            <span className="ml-1 text-gray-400 font-normal">(repetido por campanha)</span>
+          </label>
+          <textarea
+            value={campaignBlock}
+            onChange={(e) => setCampaignBlock(e.target.value)}
+            rows={7}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
+            placeholder="🟢 *Campanha {{indice}}*:&#10;📌 Nome: {{nome_campanha}}"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Bloco de Anúncio
+            <span className="ml-1 text-gray-400 font-normal">(aparece dentro da campanha quando há &gt;1 anúncio ativo)</span>
+          </label>
+          <textarea
+            value={adBlock}
+            onChange={(e) => setAdBlock(e.target.value)}
+            rows={7}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 font-mono resize-y"
+            placeholder="   📣 *Anúncio {{indice_anuncio}}*: {{nome_anuncio}}&#10;   👤 Leads: {{leads}} | 💰 CPL: {{custo_lead}}"
           />
         </div>
       </div>

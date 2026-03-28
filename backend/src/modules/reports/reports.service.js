@@ -70,7 +70,57 @@ async function fetchPeriodData(clientId, periodStart, periodEnd, objective) {
     [clientId, periodStart, periodEnd]
   );
 
-  return { metrics, campaigns };
+  // Per-ad aggregates for campaigns that have >1 ad with data in the period
+  const { rows: adRows } = await query(
+    `SELECT
+       a.id             AS internal_ad_id,
+       a.ad_id,
+       a.name           AS ad_name,
+       a.campaign_id    AS internal_campaign_id,
+       COALESCE(SUM(am.spend), 0)             AS total_spend,
+       COALESCE(SUM(am.impressions), 0)       AS total_impressions,
+       COALESCE(SUM(am.clicks), 0)            AS total_clicks,
+       COALESCE(SUM(am.reach), 0)             AS total_reach,
+       COALESCE(SUM(am.leads), 0)             AS total_leads,
+       COALESCE(SUM(am.conversions), 0)       AS total_conversions,
+       COALESCE(SUM(am.conversions_value), 0) AS total_conversions_value,
+       CASE WHEN SUM(am.impressions) > 0
+            THEN (SUM(am.clicks)::NUMERIC / SUM(am.impressions) * 100)
+            ELSE 0 END                         AS avg_ctr,
+       CASE WHEN SUM(am.impressions) > 0
+            THEN (SUM(am.spend) / SUM(am.impressions) * 1000)
+            ELSE 0 END                         AS avg_cpm,
+       CASE WHEN SUM(am.clicks) > 0
+            THEN (SUM(am.spend) / SUM(am.clicks))
+            ELSE 0 END                         AS avg_cpc
+     FROM ads a
+     JOIN ad_metrics am ON am.ad_id = a.id
+       AND am.date_start >= $2 AND am.date_stop <= $3
+     JOIN campaigns c ON c.id = a.campaign_id
+     JOIN meta_accounts ma ON ma.id = c.meta_account_id
+     WHERE ma.client_id = $1
+       ${objective && objective !== 'all' ? `AND c.objective = '${objective.replace(/'/g, "''")}'` : ''}
+     GROUP BY a.id
+     HAVING SUM(am.spend) > 0
+     ORDER BY total_spend DESC`,
+    [clientId, periodStart, periodEnd]
+  );
+
+  // Group ads by their parent campaign internal id
+  const adsByCampaign = {};
+  for (const ad of adRows) {
+    const cid = ad.internal_campaign_id;
+    if (!adsByCampaign[cid]) adsByCampaign[cid] = [];
+    adsByCampaign[cid].push(ad);
+  }
+
+  // Attach ads to their campaigns (only when >1 ad has data)
+  const campaignsWithAds = campaigns.map(c => {
+    const ads = adsByCampaign[c.id] || [];
+    return ads.length > 1 ? { ...c, ads } : { ...c, ads: [] };
+  });
+
+  return { metrics, campaigns: campaignsWithAds };
 }
 
 /**
