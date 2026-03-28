@@ -1652,6 +1652,7 @@ function NotificationsTab() {
     name: t.name,
     headerBlock: t.header_block ?? t.headerBlock ?? '',
     campaignBlock: t.campaign_block ?? t.campaignBlock ?? '',
+    adBlock: t.ad_block ?? t.adBlock ?? '',
     summaryBlock: t.summary_block ?? t.summaryBlock ?? '',
     isActive: t.is_active ?? t.isActive ?? true,
     updatedAt: t.updated_at ?? t.updatedAt ?? '',
