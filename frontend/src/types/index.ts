@@ -147,3 +147,23 @@ export interface DateRangeOption {
   value: DateRange;
   days: number;
 }
+
+export interface MessageTemplate {
+  id: string;
+  objective: string;
+  name: string;
+  headerBlock: string;
+  campaignBlock: string;
+  summaryBlock: string;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface ClientWhatsAppConfig {
+  whatsapp_number: string | null;
+  whatsapp_enabled: boolean;
+  whatsapp_api_url: string | null;
+  whatsapp_api_key: string | null;
+  whatsapp_instance: string | null;
+  report_objective: string;
+}

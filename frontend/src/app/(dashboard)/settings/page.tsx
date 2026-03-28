@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
-import { metaApi, adminApi, webhooksApi, authApi, settingsApi } from '@/lib/api';
+import { metaApi, adminApi, webhooksApi, authApi, settingsApi, notificationsApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/formatters';
 import { getUser, setToken } from '@/lib/auth';
 import TopBar from '@/components/layout/TopBar';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { MetaAccount, WebhookConfig } from '@/types';
+import { MetaAccount, WebhookConfig, MessageTemplate, ClientWhatsAppConfig } from '@/types';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 
-type SettingsTab = 'meta' | 'webhooks' | 'reports' | 'profile' | 'clients' | 'system';
+type SettingsTab = 'meta' | 'webhooks' | 'reports' | 'profile' | 'clients' | 'system' | 'notifications';
 
 // ============================================================
 // Meta Accounts Tab
@@ -1255,6 +1255,460 @@ function SystemSettingsTab() {
 }
 
 // ============================================================
+// Notifications Tab (templates + per-client WhatsApp config)
+// ============================================================
+
+const OBJECTIVES = [
+  { key: 'leads', label: 'Leads' },
+  { key: 'sales', label: 'Vendas' },
+  { key: 'engagement', label: 'Engajamento' },
+  { key: 'awareness', label: 'Alcance' },
+  { key: 'traffic', label: 'Tráfego' },
+];
+
+const HEADER_VARS = [
+  '{{nome_cliente}}', '{{periodo}}', '{{total_investido}}', '{{total_leads}}',
+  '{{custo_lead_medio}}', '{{total_vendas}}', '{{custo_venda_medio}}', '{{valor_vendas_total}}',
+  '{{total_impressoes}}', '{{total_cliques}}', '{{ctr_medio}}', '{{saldo_conta}}',
+];
+
+const CAMPAIGN_VARS = [
+  '{{indice}}', '{{nome_campanha}}', '{{leads}}', '{{custo_lead}}', '{{cliques}}',
+  '{{investimento}}', '{{vendas}}', '{{custo_venda}}', '{{valor_vendas}}',
+  '{{impressoes}}', '{{ctr}}', '{{cpm}}',
+];
+
+function TemplateEditor({ objective, template, onSaved }: {
+  objective: string;
+  template: MessageTemplate | undefined;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(template?.name ?? `Padrão - ${objective}`);
+  const [headerBlock, setHeaderBlock] = useState(template?.headerBlock ?? '');
+  const [campaignBlock, setCampaignBlock] = useState(template?.campaignBlock ?? '');
+  const [summaryBlock, setSummaryBlock] = useState(template?.summaryBlock ?? '');
+  const [isActive, setIsActive] = useState(template?.isActive ?? true);
+  const [saving, setSaving] = useState(false);
+  const [showVars, setShowVars] = useState(false);
+
+  useEffect(() => {
+    if (template) {
+      setName(template.name);
+      setHeaderBlock(template.headerBlock);
+      setCampaignBlock(template.campaignBlock);
+      setSummaryBlock(template.summaryBlock);
+      setIsActive(template.isActive);
+    }
+  }, [template]);
+
+  async function handleSave() {
+    if (!name.trim()) { toast.error('Nome do template é obrigatório.'); return; }
+    setSaving(true);
+    try {
+      await notificationsApi.upsertTemplate(objective, { name, headerBlock, campaignBlock, summaryBlock, isActive });
+      toast.success('Template salvo!');
+      onSaved();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erro ao salvar template.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 max-w-xs">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Nome do Template</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex items-center gap-2 ml-4 mt-4">
+          <span className="text-xs text-gray-500">Ativo</span>
+          <button
+            onClick={() => setIsActive((v) => !v)}
+            className={clsx(
+              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
+              isActive ? 'bg-green-500' : 'bg-gray-300'
+            )}
+          >
+            <span className={clsx(
+              'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+              isActive ? 'translate-x-4' : 'translate-x-0.5'
+            )} />
+          </button>
+        </div>
+      </div>
+
+      {/* Variables reference */}
+      <div className="border border-gray-200 rounded-lg">
+        <button
+          onClick={() => setShowVars((v) => !v)}
+          className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 rounded-lg"
+        >
+          <span>Variáveis disponíveis</span>
+          <svg className={clsx('w-4 h-4 transition-transform', showVars && 'rotate-180')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {showVars && (
+          <div className="px-3 pb-3 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Header / Resumo</p>
+              <div className="flex flex-wrap gap-1">
+                {HEADER_VARS.map((v) => (
+                  <code key={v} className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-mono">{v}</code>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Bloco de Campanha</p>
+              <div className="flex flex-wrap gap-1">
+                {CAMPAIGN_VARS.map((v) => (
+                  <code key={v} className="text-xs bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded font-mono">{v}</code>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Header
+            <span className="ml-1 text-gray-400 font-normal">(topo da mensagem)</span>
+          </label>
+          <textarea
+            value={headerBlock}
+            onChange={(e) => setHeaderBlock(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
+            placeholder="*CLIENTE: {{nome_cliente}}*&#10;&#10;📊 *DADOS META ADS {{periodo}}*"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Bloco de Campanha
+            <span className="ml-1 text-gray-400 font-normal">(repetido por campanha)</span>
+          </label>
+          <textarea
+            value={campaignBlock}
+            onChange={(e) => setCampaignBlock(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
+            placeholder="🟢 *Campanha {{indice}}*:&#10;📌 Nome: {{nome_campanha}}"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Bloco de Resumo
+            <span className="ml-1 text-gray-400 font-normal">(rodapé da mensagem)</span>
+          </label>
+          <textarea
+            value={summaryBlock}
+            onChange={(e) => setSummaryBlock(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y"
+            placeholder="📈 *RESUMO TOTAL*&#10;🏦 Total Investido: {{total_investido}}"
+          />
+        </div>
+      </div>
+
+      <div>
+        <Button variant="primary" size="sm" loading={saving} onClick={handleSave}>
+          Salvar Template
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ClientWhatsAppRow({ client, onSaved }: {
+  client: { id: string; name: string; email: string };
+  onSaved: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [config, setConfig] = useState<ClientWhatsAppConfig | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [whatsappApiUrl, setWhatsappApiUrl] = useState('');
+  const [whatsappApiKey, setWhatsappApiKey] = useState('');
+  const [whatsappInstance, setWhatsappInstance] = useState('');
+  const [reportObjective, setReportObjective] = useState('leads');
+
+  async function handleExpand() {
+    if (expanded) { setExpanded(false); return; }
+    setLoading(true);
+    try {
+      const res = await adminApi.getClientWhatsApp(client.id);
+      const cfg = res.data.config;
+      setConfig(cfg);
+      setWhatsappNumber(cfg.whatsapp_number ?? '');
+      setWhatsappEnabled(cfg.whatsapp_enabled ?? false);
+      setWhatsappApiUrl(cfg.whatsapp_api_url ?? '');
+      setWhatsappApiKey(cfg.whatsapp_api_key ?? '');
+      setWhatsappInstance(cfg.whatsapp_instance ?? '');
+      setReportObjective(cfg.report_objective ?? 'leads');
+      setExpanded(true);
+    } catch {
+      toast.error('Erro ao carregar configuração WhatsApp.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await adminApi.updateClientWhatsApp(client.id, {
+        whatsappNumber: whatsappNumber || undefined,
+        whatsappEnabled,
+        whatsappApiUrl: whatsappApiUrl || undefined,
+        whatsappApiKey: whatsappApiKey || undefined,
+        whatsappInstance: whatsappInstance || undefined,
+        reportObjective,
+      });
+      toast.success('Configuração WhatsApp salva!');
+      onSaved();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erro ao salvar configuração.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={handleExpand}
+        className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 text-sm font-bold shrink-0">
+            {client.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-medium text-gray-800">{client.name}</p>
+            <p className="text-xs text-gray-400">{client.email}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {config && (
+            <span className={clsx(
+              'text-xs px-2 py-0.5 rounded-full font-medium',
+              config.whatsapp_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            )}>
+              {config.whatsapp_enabled ? 'Ativo' : 'Inativo'}
+            </span>
+          )}
+          {loading && <span className="text-xs text-gray-400">Carregando...</span>}
+          <svg className={clsx('w-4 h-4 text-gray-400 transition-transform', expanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50 space-y-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-600">Ativar notificações WhatsApp</span>
+            <button
+              onClick={() => setWhatsappEnabled((v) => !v)}
+              className={clsx(
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
+                whatsappEnabled ? 'bg-green-500' : 'bg-gray-300'
+              )}
+            >
+              <span className={clsx(
+                'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                whatsappEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              )} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Número WhatsApp (ou Group ID)</label>
+              <input
+                type="text"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="5511999999999@s.whatsapp.net"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Objetivo do Relatório</label>
+              <select
+                value={reportObjective}
+                onChange={(e) => setReportObjective(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                {OBJECTIVES.map((o) => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Evolution API URL</label>
+              <input
+                type="url"
+                value={whatsappApiUrl}
+                onChange={(e) => setWhatsappApiUrl(e.target.value)}
+                placeholder="https://evolution.seudominio.com"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+              <input
+                type="password"
+                value={whatsappApiKey}
+                onChange={(e) => setWhatsappApiKey(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Instância</label>
+              <input
+                type="text"
+                value={whatsappInstance}
+                onChange={(e) => setWhatsappInstance(e.target.value)}
+                placeholder="nome-da-instancia"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="pt-1">
+            <Button variant="primary" size="sm" loading={saving} onClick={handleSave}>
+              Salvar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NotificationsTab() {
+  const [activeObjective, setActiveObjective] = useState('leads');
+
+  const { data: templatesData, isLoading: templatesLoading, mutate: mutateTemplates } = useSWR(
+    'notification-templates',
+    () => notificationsApi.listTemplates().then((r) => r.data.templates)
+  );
+  const templates: MessageTemplate[] = templatesData || [];
+
+  const { data: clientsData, isLoading: clientsLoading } = useSWR(
+    'admin-clients-whatsapp',
+    () => adminApi.listClients().then((r) => r.data.clients)
+  );
+  const clients = clientsData || [];
+
+  // Map templates from snake_case API response to camelCase
+  const mappedTemplates: MessageTemplate[] = templates.map((t: any) => ({
+    id: t.id,
+    objective: t.objective,
+    name: t.name,
+    headerBlock: t.header_block ?? t.headerBlock ?? '',
+    campaignBlock: t.campaign_block ?? t.campaignBlock ?? '',
+    summaryBlock: t.summary_block ?? t.summaryBlock ?? '',
+    isActive: t.is_active ?? t.isActive ?? true,
+    updatedAt: t.updated_at ?? t.updatedAt ?? '',
+  }));
+
+  const currentTemplate = mappedTemplates.find((t) => t.objective === activeObjective);
+
+  return (
+    <div className="space-y-5">
+      {/* Section 1: Message Templates */}
+      <Card
+        title="Templates de Mensagem"
+        subtitle="Personalize o texto enviado no WhatsApp para cada tipo de campanha"
+      >
+        {templatesLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-gray-50 rounded-lg animate-pulse" />)}
+          </div>
+        ) : (
+          <>
+            {/* Objective tabs */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit flex-wrap mb-5">
+              {OBJECTIVES.map((obj) => (
+                <button
+                  key={obj.key}
+                  onClick={() => setActiveObjective(obj.key)}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                    activeObjective === obj.key
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  )}
+                >
+                  {obj.label}
+                </button>
+              ))}
+            </div>
+
+            <TemplateEditor
+              key={activeObjective}
+              objective={activeObjective}
+              template={currentTemplate}
+              onSaved={() => mutateTemplates()}
+            />
+          </>
+        )}
+      </Card>
+
+      {/* Section 2: Per-client WhatsApp config */}
+      <Card
+        title="Configuração WhatsApp por Cliente"
+        subtitle="Configure o número e instância Evolution API para envio de relatórios a cada cliente"
+      >
+        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2.5 text-sm text-green-800">
+          <svg className="w-4 h-4 mt-0.5 shrink-0 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            Clique em um cliente para expandir e editar suas configurações de notificação WhatsApp.
+            O template usado é o que corresponde ao <strong>Objetivo do Relatório</strong> selecionado.
+          </span>
+        </div>
+
+        {clientsLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}
+          </div>
+        ) : clients.length === 0 ? (
+          <p className="text-sm text-gray-500 py-4 text-center">Nenhum cliente cadastrado.</p>
+        ) : (
+          <div className="space-y-2">
+            {clients.map((client: any) => (
+              <ClientWhatsAppRow
+                key={client.id}
+                client={client}
+                onSaved={() => {}}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Settings Page
 // ============================================================
 
@@ -1314,6 +1768,16 @@ export default function SettingsPage() {
       ),
     },
     {
+      key: 'notifications',
+      label: 'WhatsApp',
+      adminOnly: true,
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
+      ),
+    },
+    {
       key: 'profile',
       label: 'Meu Perfil',
       icon: (
@@ -1357,6 +1821,7 @@ export default function SettingsPage() {
         {activeTab === 'profile' && <ProfileTab />}
         {activeTab === 'clients' && isAdmin && <ClientsTab />}
         {activeTab === 'system' && isAdmin && <SystemSettingsTab />}
+        {activeTab === 'notifications' && isAdmin && <NotificationsTab />}
       </div>
     </div>
   );

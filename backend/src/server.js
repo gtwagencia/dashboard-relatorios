@@ -22,8 +22,9 @@ const campaignsRouter = require('./modules/campaigns/campaigns.router');
 const metricsRouter   = require('./modules/metrics/metrics.router');
 const reportsRouter   = require('./modules/reports/reports.router');
 const aiRouter        = require('./modules/ai/ai.router');
-const webhooksRouter  = require('./modules/webhooks/webhooks.router');
-const settingsRouter  = require('./modules/settings/settings.router');
+const webhooksRouter       = require('./modules/webhooks/webhooks.router');
+const settingsRouter       = require('./modules/settings/settings.router');
+const notificationsRouter  = require('./modules/notifications/notifications.router');
 
 // ── App setup ─────────────────────────────────────────────────────────────────
 const app = express();
@@ -104,6 +105,9 @@ app.use('/api/admin/clients', clientsRouter);
 
 // Admin only: system settings (Meta token, OpenAI key)
 app.use('/api/settings', settingsRouter);
+
+// Admin only: notification templates
+app.use('/api/notifications', notificationsRouter);
 
 // 404 handler for unknown routes
 app.use((req, res) => {

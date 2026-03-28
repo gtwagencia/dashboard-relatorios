@@ -103,16 +103,27 @@ export default function DashboardPage() {
     { refreshInterval: 5 * 60 * 1000 }
   );
 
+  const { mutate: mutateAccounts } = useSWR<MetaAccount[]>('meta-accounts-dashboard');
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([mutateSummary(), mutateObjective(), mutateTimeseries()]);
+      // Trigger sync for the selected account (or all accounts if none selected)
+      const accountsToSync = selectedAccountId
+        ? [selectedAccountId]
+        : accounts.map((a) => a.id);
+
+      await Promise.allSettled(accountsToSync.map((id) => metaApi.sync(id)));
+
+      // Give the backend a moment to process before re-fetching
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      await Promise.all([mutateSummary(), mutateObjective(), mutateTimeseries(), mutateAccounts()]);
     } finally {
       setRefreshing(false);
     }
-  }, [mutateSummary, mutateObjective, mutateTimeseries]);
+  }, [selectedAccountId, accounts, mutateSummary, mutateObjective, mutateTimeseries, mutateAccounts]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);

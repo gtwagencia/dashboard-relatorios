@@ -171,7 +171,11 @@ async function syncAccount(metaAccountId) {
     let synced = 0;
     let errors = 0;
 
-    // 3. Upsert each campaign and fetch its insights
+    // 3. Upsert each campaign and fetch its insights (incremental)
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
     for (const campaign of campaigns) {
       try {
         const internalId = await upsertCampaign(metaAccountId, campaign);
@@ -181,7 +185,33 @@ async function syncAccount(metaAccountId) {
         const campaignStatus = campaign.status || campaign.configured_status || '';
 
         if (syncableStatuses.includes(campaignStatus.toUpperCase())) {
-          const insights = await getCampaignInsights(campaign.id, 'last_30d');
+          // Find the latest date already stored for this campaign.
+          // Always re-fetch the last 2 days because Meta can finalize/adjust
+          // yesterday's data several hours after midnight.
+          const { rows: latestRows } = await query(
+            `SELECT MAX(date_start) AS latest FROM campaign_metrics WHERE campaign_id = $1`,
+            [internalId]
+          );
+          const latestStored = latestRows[0]?.latest; // null if no data yet
+
+          let insights;
+          if (!latestStored) {
+            // First sync: load full 30-day history
+            insights = await getCampaignInsights(campaign.id, 'last_30d');
+          } else {
+            // Incremental: fetch from (latest - 2 days) to yesterday to cover Meta's data finalization window
+            const sinceDate = new Date(latestStored);
+            sinceDate.setUTCDate(sinceDate.getUTCDate() - 2);
+            const since = sinceDate.toISOString().slice(0, 10);
+
+            // Skip if we're already up to date (latest stored is yesterday or later)
+            if (latestStored >= yesterdayStr) {
+              synced++;
+              continue;
+            }
+
+            insights = await getCampaignInsights(campaign.id, null, { since, until: yesterdayStr });
+          }
 
           if (insights.length > 0) {
             const metricsList = insights.map(normaliseInsight);

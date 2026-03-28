@@ -12,6 +12,8 @@ import {
   MetaAccount,
   PaginatedResponse,
   SystemSetting,
+  MessageTemplate,
+  ClientWhatsAppConfig,
 } from '@/types';
 
 const api: AxiosInstance = axios.create({
@@ -182,6 +184,22 @@ export const adminApi = {
     api.put(`/admin/clients/${id}`, data),
   toggleStatus: (id: string) => api.patch(`/admin/clients/${id}/toggle`),
   getClientMetaAccounts: (id: string) => api.get(`/admin/clients/${id}/meta-accounts`),
+  getClientWhatsApp: (id: string) =>
+    api.get<{ config: ClientWhatsAppConfig }>(`/admin/clients/${id}/whatsapp`),
+  updateClientWhatsApp: (id: string, data: Partial<ClientWhatsAppConfig> & { whatsappNumber?: string; whatsappEnabled?: boolean; whatsappApiUrl?: string; whatsappApiKey?: string; whatsappInstance?: string; reportObjective?: string }) =>
+    api.put(`/admin/clients/${id}/whatsapp`, data),
+};
+
+export const notificationsApi = {
+  listTemplates: () => api.get<{ templates: MessageTemplate[] }>('/notifications/templates'),
+  upsertTemplate: (objective: string, data: Partial<MessageTemplate>) =>
+    api.put<{ template: MessageTemplate }>(`/notifications/templates/${objective}`, {
+      name: data.name,
+      headerBlock: data.headerBlock,
+      campaignBlock: data.campaignBlock,
+      summaryBlock: data.summaryBlock,
+      isActive: data.isActive,
+    }),
 };
 
 // System Settings API (admin only)

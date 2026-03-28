@@ -27,7 +27,7 @@ async function fetchPeriodData(clientId, periodStart, periodEnd, objective) {
 
   // Raw daily metrics for summary computation
   const { rows: metrics } = await query(
-    `SELECT cm.spend, cm.impressions, cm.reach, cm.clicks, cm.leads, cm.conversions, cm.ctr, cm.cpm, cm.cpc
+    `SELECT cm.spend, cm.impressions, cm.reach, cm.clicks, cm.leads, cm.conversions, cm.conversions_value, cm.ctr, cm.cpm, cm.cpc
      FROM campaign_metrics cm
      JOIN campaigns c ON c.id = cm.campaign_id
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
@@ -43,21 +43,22 @@ async function fetchPeriodData(clientId, periodStart, periodEnd, objective) {
        c.name,
        c.objective,
        c.status,
-       COALESCE(SUM(cm.spend), 0)       AS total_spend,
-       COALESCE(SUM(cm.impressions), 0) AS total_impressions,
-       COALESCE(SUM(cm.clicks), 0)      AS total_clicks,
-       COALESCE(SUM(cm.reach), 0)       AS total_reach,
-       COALESCE(SUM(cm.leads), 0)       AS total_leads,
-       COALESCE(SUM(cm.conversions), 0) AS total_conversions,
+       COALESCE(SUM(cm.spend), 0)                AS total_spend,
+       COALESCE(SUM(cm.impressions), 0)           AS total_impressions,
+       COALESCE(SUM(cm.clicks), 0)               AS total_clicks,
+       COALESCE(SUM(cm.reach), 0)                AS total_reach,
+       COALESCE(SUM(cm.leads), 0)                AS total_leads,
+       COALESCE(SUM(cm.conversions), 0)          AS total_conversions,
+       COALESCE(SUM(cm.conversions_value), 0)    AS total_conversions_value,
        CASE WHEN SUM(cm.impressions) > 0
             THEN (SUM(cm.clicks)::NUMERIC / SUM(cm.impressions) * 100)
-            ELSE 0 END                  AS avg_ctr,
+            ELSE 0 END                            AS avg_ctr,
        CASE WHEN SUM(cm.impressions) > 0
             THEN (SUM(cm.spend) / SUM(cm.impressions) * 1000)
-            ELSE 0 END                  AS avg_cpm,
+            ELSE 0 END                            AS avg_cpm,
        CASE WHEN SUM(cm.clicks) > 0
             THEN (SUM(cm.spend) / SUM(cm.clicks))
-            ELSE 0 END                  AS avg_cpc
+            ELSE 0 END                            AS avg_cpc
      FROM campaigns c
      JOIN meta_accounts ma ON ma.id = c.meta_account_id
      LEFT JOIN campaign_metrics cm ON cm.campaign_id = c.id
@@ -133,6 +134,48 @@ async function generateReport(clientId, type, objective, periodStart, periodEnd)
     campaigns
   );
 
+  // Render WhatsApp message if client has notifications enabled
+  let whatsappPayload = null;
+  try {
+    const { rows: clientConfig } = await query(
+      `SELECT name, whatsapp_number, whatsapp_enabled, whatsapp_api_url, whatsapp_api_key, whatsapp_instance, report_objective
+       FROM clients WHERE id = $1`,
+      [clientId]
+    );
+    const cfg = clientConfig[0];
+    if (cfg?.whatsapp_enabled && cfg.whatsapp_number) {
+      const notifSvc = require('../notifications/notifications.service');
+      const resolvedObjective = cfg.report_objective || 'leads';
+      const template = await notifSvc.getTemplate(resolvedObjective);
+      if (template && template.is_active) {
+        const message = notifSvc.renderMessage(template, {
+          clientName,
+          reportType: type,
+          periodStart,
+          periodEnd,
+          campaigns: payload.campaigns,
+          summary: payload.summary,
+          balance: null,
+        });
+        whatsappPayload = {
+          event: 'whatsapp.report',
+          clientId,
+          clientName,
+          whatsappNumber: cfg.whatsapp_number,
+          evolutionApiUrl: cfg.whatsapp_api_url,
+          evolutionApiKey: cfg.whatsapp_api_key,
+          evolutionInstance: cfg.whatsapp_instance,
+          message,
+          reportType: type,
+          period: payload.period,
+        };
+      }
+    }
+  } catch (err) {
+    // Non-fatal — log and continue
+    logger.warn('WhatsApp notification render failed', { clientId, error: err.message });
+  }
+
   // Save to DB with status 'pending'
   const reportId = uuidv4();
   await query(
@@ -164,6 +207,23 @@ async function generateReport(clientId, type, objective, periodStart, periodEnd)
         reportStatus = 'failed';
         lastError = `Webhook delivery failed: ${wh.url}`;
       }
+    }
+  }
+
+  // Dispatch WhatsApp payload to webhooks configured for 'whatsapp.report'
+  if (whatsappPayload) {
+    try {
+      const { rows: whatsappWebhooks } = await query(
+        `SELECT id, url, secret FROM webhook_configs
+         WHERE client_id = $1 AND is_active = true
+           AND (event_type = 'whatsapp.report' OR event_type = '*')`,
+        [clientId]
+      );
+      for (const wh of whatsappWebhooks) {
+        await sendWebhookPayload(wh.url, whatsappPayload, wh.secret);
+      }
+    } catch (err) {
+      logger.warn('WhatsApp webhook dispatch failed', { clientId, error: err.message });
     }
   }
 

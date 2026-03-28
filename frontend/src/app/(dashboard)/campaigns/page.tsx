@@ -101,11 +101,16 @@ export default function CampaignsPage() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      const accountsToSync = selectedAccountId
+        ? [selectedAccountId]
+        : accounts.map((a) => a.id);
+      await Promise.allSettled(accountsToSync.map((id) => metaApi.sync(id)));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       await mutate();
     } finally {
       setRefreshing(false);
     }
-  }, [mutate]);
+  }, [selectedAccountId, accounts, mutate]);
 
   const handleDateRangeChange = (range: DateRangeValue, cfrom?: string, cto?: string) => {
     setDateRange(range);

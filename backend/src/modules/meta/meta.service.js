@@ -194,20 +194,27 @@ async function getCampaigns(adAccountId) {
 
 /**
  * Get insights for a specific campaign.
+ * Pass either a datePreset OR { since, until } for a custom date range.
  * @param {string} campaignId
- * @param {string} [datePreset='last_30d'] - Meta date preset
+ * @param {string} [datePreset='last_30d'] - Meta date preset (ignored when since/until provided)
+ * @param {{ since: string, until: string } | null} [dateRange=null] - Custom range (YYYY-MM-DD)
  * @returns {Promise<object[]>}
  */
-async function getCampaignInsights(campaignId, datePreset = 'last_30d') {
-  const response = await api.get(`/${campaignId}/insights`, {
-    params: {
-      access_token: await getGlobalToken(),
-      fields: INSIGHT_FIELDS,
-      date_preset: datePreset,
-      time_increment: 1, // daily breakdown
-      limit: 100,
-    },
-  });
+async function getCampaignInsights(campaignId, datePreset = 'last_30d', dateRange = null) {
+  const params = {
+    access_token: await getGlobalToken(),
+    fields: INSIGHT_FIELDS,
+    time_increment: 1, // daily breakdown
+    limit: 100,
+  };
+
+  if (dateRange && dateRange.since && dateRange.until) {
+    params.time_range = JSON.stringify({ since: dateRange.since, until: dateRange.until });
+  } else {
+    params.date_preset = datePreset;
+  }
+
+  const response = await api.get(`/${campaignId}/insights`, { params });
 
   const rl = parseRateLimit(response.headers);
   if (rl && rl.remaining < 5) {

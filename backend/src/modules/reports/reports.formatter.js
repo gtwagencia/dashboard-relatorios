@@ -22,6 +22,7 @@ function computeSummary(metrics) {
   let totalImpressions = 0;
   let totalClicks = 0;
   let totalReach = 0;
+  let totalConversionsValue = 0;
 
   for (const m of metrics) {
     totalSpend += parseFloat(m.spend || 0);
@@ -30,6 +31,7 @@ function computeSummary(metrics) {
     totalImpressions += parseInt(m.impressions || 0, 10);
     totalClicks += parseInt(m.clicks || 0, 10);
     totalReach += parseInt(m.reach || 0, 10);
+    totalConversionsValue += parseFloat(m.conversions_value || 0);
   }
 
   const costPerLead = totalLeads > 0 ? totalSpend / totalLeads : 0;
@@ -46,6 +48,9 @@ function computeSummary(metrics) {
     avg_cpm: Math.round(avgCpm * 100) / 100,
     total_conversions: totalConversions,
     cost_per_conversion: Math.round(costPerConversion * 100) / 100,
+    total_conversions_value: Math.round(totalConversionsValue * 100) / 100,
+    total_impressions: totalImpressions,
+    total_clicks: totalClicks,
   };
 }
 
@@ -62,6 +67,7 @@ function formatCampaign(c) {
     spend: Math.round(parseFloat(c.total_spend || c.spend || 0) * 100) / 100,
     leads: parseInt(c.total_leads || c.leads || 0, 10),
     conversions: parseInt(c.total_conversions || c.conversions || 0, 10),
+    conversions_value: parseFloat(c.total_conversions_value || c.conversions_value || 0),
     ctr: parseFloat(c.avg_ctr || c.ctr || 0),
     cpc: parseFloat(c.avg_cpc || c.cpc || 0),
     cpm: parseFloat(c.avg_cpm || c.cpm || 0),
