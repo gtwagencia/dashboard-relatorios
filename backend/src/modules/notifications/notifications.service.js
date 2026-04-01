@@ -2,7 +2,7 @@
 
 const { query } = require('../../config/database');
 
-const OBJECTIVES = ['leads', 'sales', 'engagement', 'awareness', 'traffic'];
+const OBJECTIVES = ['leads', 'sales', 'engagement', 'awareness', 'traffic', 'messages'];
 
 async function listTemplates() {
   const { rows } = await query(
@@ -188,6 +188,7 @@ async function renderFullMessage({ clientName, accountName, reportType, periodSt
     engagement: '👁️ *Engajamento*',
     awareness:  '📢 *Alcance/Awareness*',
     traffic:    '🖱️ *Tráfego*',
+    messages:   '💬 *Mensagens*',
   };
 
   // Group campaigns by objective (only include objectives that have campaigns)
@@ -198,7 +199,7 @@ async function renderFullMessage({ clientName, accountName, reportType, periodSt
     grouped[obj].push(c);
   }
 
-  const objectiveOrder = ['leads', 'sales', 'engagement', 'awareness', 'traffic'];
+  const objectiveOrder = ['leads', 'sales', 'engagement', 'awareness', 'traffic', 'messages'];
   const sections = [];
 
   for (const obj of objectiveOrder) {
@@ -215,7 +216,9 @@ async function renderFullMessage({ clientName, accountName, reportType, periodSt
         indice:        String(i + 1),
         nome_campanha: c.name,
         leads:         fmtNumber(c.leads),
+        mensagens:     fmtNumber(c.leads),   // alias para campanhas de mensagens
         custo_lead:    fmtCurrency(c.leads > 0 ? c.spend / c.leads : 0),
+        custo_mensagem: fmtCurrency(c.leads > 0 ? c.spend / c.leads : 0),
         cliques:       fmtNumber(c.clicks),
         investimento:  fmtCurrency(c.spend),
         vendas:        fmtNumber(c.conversions),
@@ -231,19 +234,21 @@ async function renderFullMessage({ clientName, accountName, reportType, periodSt
       if (c.ads && c.ads.length > 1 && template.ad_block) {
         const adLines = c.ads.map((a, ai) =>
           substituteVars(template.ad_block, {
-            indice_anuncio: String(ai + 1),
-            nome_anuncio:   a.name,
-            leads:          fmtNumber(a.leads),
-            custo_lead:     fmtCurrency(a.leads > 0 ? a.spend / a.leads : 0),
-            cliques:        fmtNumber(a.clicks),
-            investimento:   fmtCurrency(a.spend),
-            vendas:         fmtNumber(a.conversions),
-            custo_venda:    fmtCurrency(a.conversions > 0 ? a.spend / a.conversions : 0),
-            valor_vendas:   fmtCurrency(a.conversions_value || 0),
-            impressoes:     fmtNumber(a.impressions),
-            ctr:            fmtPercent(a.ctr),
-            cpm:            fmtCurrency(a.cpm),
-            cpc:            fmtCurrency(a.cpc),
+            indice_anuncio:  String(ai + 1),
+            nome_anuncio:    a.name,
+            leads:           fmtNumber(a.leads),
+            mensagens:       fmtNumber(a.leads),
+            custo_lead:      fmtCurrency(a.leads > 0 ? a.spend / a.leads : 0),
+            custo_mensagem:  fmtCurrency(a.leads > 0 ? a.spend / a.leads : 0),
+            cliques:         fmtNumber(a.clicks),
+            investimento:    fmtCurrency(a.spend),
+            vendas:          fmtNumber(a.conversions),
+            custo_venda:     fmtCurrency(a.conversions > 0 ? a.spend / a.conversions : 0),
+            valor_vendas:    fmtCurrency(a.conversions_value || 0),
+            impressoes:      fmtNumber(a.impressions),
+            ctr:             fmtPercent(a.ctr),
+            cpm:             fmtCurrency(a.cpm),
+            cpc:             fmtCurrency(a.cpc),
           })
         );
         return line + '\n' + adLines.join('\n');
@@ -251,7 +256,7 @@ async function renderFullMessage({ clientName, accountName, reportType, periodSt
       return line;
     });
 
-    sections.push(`${sectionLabel}\n${campaignLines.join('\n')}`);
+    sections.push(`${sectionLabel}\n${campaignLines.join('\n\n')}`);
   }
 
   // Use the 'leads' template header/summary as global wrapper (most common),

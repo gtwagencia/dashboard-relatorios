@@ -23,7 +23,7 @@ const OBJECTIVE_MAP = {
   OUTCOME_ENGAGEMENT: 'engagement',
   POST_ENGAGEMENT: 'engagement',
   VIDEO_VIEWS: 'engagement',
-  MESSAGES: 'engagement',
+  MESSAGES: 'messages',
   // Awareness
   BRAND_AWARENESS: 'awareness',
   REACH: 'awareness',

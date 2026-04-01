@@ -129,6 +129,36 @@ router.post('/', requireAdmin, async (req, res, next) => {
 });
 
 /**
+ * PUT /api/meta-accounts/:id
+ * Update a Meta account (businessName, currency). ADMIN ONLY.
+ */
+router.put('/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { businessName, currency } = req.body;
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+
+    if (businessName !== undefined) { setClauses.push(`business_name = $${idx++}`); params.push(businessName.trim()); }
+    if (currency !== undefined)     { setClauses.push(`currency = $${idx++}`);       params.push(currency.trim()); }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'Nenhum campo para atualizar', code: 400 });
+    }
+
+    params.push(req.params.id);
+    const { rows } = await query(
+      `UPDATE meta_accounts SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING id, business_name, currency`,
+      params
+    );
+
+    if (!rows.length) return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    logger.info('Meta account updated', { id: req.params.id });
+    return res.status(200).json({ account: rows[0] });
+  } catch (err) { next(err); }
+});
+
+/**
  * DELETE /api/meta-accounts/:id
  * Remove a Meta account. ADMIN ONLY.
  */

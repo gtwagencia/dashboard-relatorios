@@ -176,6 +176,9 @@ export const metaApi = {
   getBalance: (id: string) =>
     api.get<{ balance: { balance: number; currency: string; amountSpent: number; spendCap: number; accountStatus: number; displayString: string | null } }>(`/meta-accounts/${id}/balance`),
 
+  update: (id: string, data: { businessName?: string; currency?: string }) =>
+    api.put<{ account: { id: string; business_name: string; currency: string } }>(`/meta-accounts/${id}`, data),
+
   delete: (id: string) => api.delete(`/meta-accounts/${id}`),
 
   getWhatsApp: (id: string) =>

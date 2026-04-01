@@ -34,6 +34,9 @@ function MetaAccountsTab() {
   const [shares, setShares] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [shareClientId, setShareClientId] = useState('');
   const [addingShare, setAddingShare] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const { data: accountsData, isLoading, mutate } = useSWR(
     'meta-accounts',
@@ -142,6 +145,26 @@ function MetaAccountsTab() {
       toast.error('Erro ao remover conta.');
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function openEdit(account: MetaAccount) {
+    setEditingId(account.id);
+    setEditName(account.businessName || '');
+  }
+
+  async function handleSaveEdit(id: string) {
+    if (!editName.trim()) { toast.error('O nome não pode ser vazio.'); return; }
+    setSavingEdit(true);
+    try {
+      await metaApi.update(id, { businessName: editName.trim() });
+      await mutate();
+      toast.success('Nome atualizado!');
+      setEditingId(null);
+    } catch {
+      toast.error('Erro ao atualizar conta.');
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -257,7 +280,22 @@ function MetaAccountsTab() {
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{account.businessName}</p>
+                    {editingId === account.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(account.id); if (e.key === 'Escape') setEditingId(null); }}
+                          className="px-2 py-1 text-sm border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                        />
+                        <Button variant="primary" size="sm" loading={savingEdit} onClick={() => handleSaveEdit(account.id)}>Salvar</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>Cancelar</Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium text-gray-800">{account.businessName}</p>
+                    )}
                     <p className="text-xs text-gray-500">{account.adAccountId} • {account.currency}</p>
                     {account.clientName && (
                       <p className="text-xs text-blue-500 font-medium">Cliente: {account.clientName}</p>
@@ -270,6 +308,20 @@ function MetaAccountsTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openEdit(account)}
+                      icon={
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      }
+                    >
+                      Editar
+                    </Button>
+                  )}
                   {isAdmin && (
                     <Button
                       variant="secondary"
@@ -1336,10 +1388,11 @@ const OBJECTIVES = [
   { key: 'engagement', label: 'Engajamento' },
   { key: 'awareness', label: 'Alcance' },
   { key: 'traffic', label: 'Tráfego' },
+  { key: 'messages', label: 'Mensagens' },
 ];
 
 const HEADER_VARS = [
-  '{{nome_cliente}}', '{{periodo}}', '{{total_investido}}', '{{total_leads}}',
+  '{{nome_cliente}}', '{{nome_conta_anuncio}}', '{{periodo}}', '{{total_investido}}', '{{total_leads}}',
   '{{custo_lead_medio}}', '{{total_vendas}}', '{{custo_venda_medio}}', '{{valor_vendas_total}}',
   '{{total_impressoes}}', '{{total_cliques}}', '{{ctr_medio}}', '{{saldo_conta}}',
 ];
@@ -1348,6 +1401,7 @@ const CAMPAIGN_VARS = [
   '{{indice}}', '{{nome_campanha}}', '{{leads}}', '{{custo_lead}}', '{{cliques}}',
   '{{investimento}}', '{{vendas}}', '{{custo_venda}}', '{{valor_vendas}}',
   '{{impressoes}}', '{{ctr}}', '{{cpm}}',
+  '{{mensagens}}', '{{custo_mensagem}}',
 ];
 
 const AD_VARS = [
