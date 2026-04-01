@@ -34,24 +34,35 @@ router.get('/', async (req, res, next) => {
  */
 router.post('/trigger', async (req, res, next) => {
   try {
-    const clientId = req.user.clientId;
-    const { type, objective = 'all', periodStart, periodEnd } = req.body;
+    const { type, metaAccountId, periodStart, periodEnd } = req.body;
 
-    if (!type || !periodStart || !periodEnd) {
+    if (!type || !metaAccountId || !periodStart || !periodEnd) {
       return res.status(400).json({
-        error: 'type, periodStart and periodEnd are required',
+        error: 'type, metaAccountId, periodStart e periodEnd são obrigatórios',
         code: 400,
       });
     }
 
     if (!['daily', 'weekly', 'monthly', 'custom'].includes(type)) {
       return res.status(400).json({
-        error: 'type must be one of: daily, weekly, monthly, custom',
+        error: 'type deve ser: daily, weekly, monthly ou custom',
         code: 400,
       });
     }
 
-    const result = await reportsService.triggerReport(clientId, type, objective, periodStart, periodEnd);
+    // Non-admin: verify the account belongs to their client
+    if (req.user.role !== 'admin') {
+      const { query } = require('../../config/database');
+      const { rows } = await query(
+        `SELECT id FROM meta_accounts WHERE id = $1 AND client_id = $2`,
+        [metaAccountId, req.user.clientId]
+      );
+      if (!rows.length) {
+        return res.status(403).json({ error: 'Acesso negado a esta conta', code: 403 });
+      }
+    }
+
+    const result = await reportsService.triggerReport(metaAccountId, type, periodStart, periodEnd);
 
     return res.status(202).json({
       message: 'Report generated',

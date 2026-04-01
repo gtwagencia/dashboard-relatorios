@@ -193,6 +193,48 @@ router.post('/:id/sync', async (req, res, next) => {
 });
 
 /**
+ * GET /api/meta-accounts/:id/whatsapp
+ * Get WhatsApp notification config for a meta account. ADMIN ONLY.
+ */
+router.get('/:id/whatsapp', requireAdmin, async (req, res, next) => {
+  try {
+    const { rows } = await query(
+      `SELECT whatsapp_enabled, whatsapp_number, whatsapp_api_url, whatsapp_api_key, whatsapp_instance
+       FROM meta_accounts WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    return res.status(200).json({ config: rows[0] });
+  } catch (err) { next(err); }
+});
+
+/**
+ * PUT /api/meta-accounts/:id/whatsapp
+ * Update WhatsApp notification config for a meta account. ADMIN ONLY.
+ * Body: { whatsappEnabled, whatsappNumber, whatsappApiUrl, whatsappApiKey, whatsappInstance }
+ */
+router.put('/:id/whatsapp', requireAdmin, async (req, res, next) => {
+  try {
+    const { whatsappEnabled, whatsappNumber, whatsappApiUrl, whatsappApiKey, whatsappInstance } = req.body;
+    const { rows } = await query(
+      `UPDATE meta_accounts
+       SET whatsapp_enabled  = $1,
+           whatsapp_number   = $2,
+           whatsapp_api_url  = $3,
+           whatsapp_api_key  = $4,
+           whatsapp_instance = $5
+       WHERE id = $6
+       RETURNING whatsapp_enabled, whatsapp_number, whatsapp_api_url, whatsapp_api_key, whatsapp_instance`,
+      [whatsappEnabled ?? false, whatsappNumber || null, whatsappApiUrl || null,
+       whatsappApiKey || null, whatsappInstance || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Conta Meta não encontrada', code: 404 });
+    logger.info('WhatsApp config updated for meta account', { metaAccountId: req.params.id });
+    return res.status(200).json({ config: rows[0] });
+  } catch (err) { next(err); }
+});
+
+/**
  * GET /api/meta-accounts/available
  * Returns the ad accounts accessible by the global token (admin only).
  * Useful to discover account IDs when adding a new client.

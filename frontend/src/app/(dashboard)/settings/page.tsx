@@ -1457,36 +1457,33 @@ function TemplateEditor({ objective, template, onSaved }: {
   );
 }
 
-function ClientWhatsAppRow({ client, onSaved }: {
-  client: { id: string; name: string; email: string };
-  onSaved: () => void;
+function AccountWhatsAppRow({ account }: {
+  account: { id: string; businessName: string; adAccountId: string; clientName?: string };
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [config, setConfig] = useState<ClientWhatsAppConfig | null>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Form state
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [whatsappApiUrl, setWhatsappApiUrl] = useState('');
   const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [whatsappInstance, setWhatsappInstance] = useState('');
-  const [reportObjective, setReportObjective] = useState('leads');
 
   async function handleExpand() {
     if (expanded) { setExpanded(false); return; }
+    if (loaded) { setExpanded(true); return; }
     setLoading(true);
     try {
-      const res = await adminApi.getClientWhatsApp(client.id);
+      const res = await metaApi.getWhatsApp(account.id);
       const cfg = res.data.config;
-      setConfig(cfg);
+      setEnabled(cfg.whatsapp_enabled ?? false);
       setWhatsappNumber(cfg.whatsapp_number ?? '');
-      setWhatsappEnabled(cfg.whatsapp_enabled ?? false);
       setWhatsappApiUrl(cfg.whatsapp_api_url ?? '');
       setWhatsappApiKey(cfg.whatsapp_api_key ?? '');
       setWhatsappInstance(cfg.whatsapp_instance ?? '');
-      setReportObjective(cfg.report_objective ?? 'leads');
+      setLoaded(true);
       setExpanded(true);
     } catch {
       toast.error('Erro ao carregar configuração WhatsApp.');
@@ -1498,16 +1495,14 @@ function ClientWhatsAppRow({ client, onSaved }: {
   async function handleSave() {
     setSaving(true);
     try {
-      await adminApi.updateClientWhatsApp(client.id, {
+      await metaApi.updateWhatsApp(account.id, {
+        whatsappEnabled: enabled,
         whatsappNumber: whatsappNumber || undefined,
-        whatsappEnabled,
         whatsappApiUrl: whatsappApiUrl || undefined,
         whatsappApiKey: whatsappApiKey || undefined,
         whatsappInstance: whatsappInstance || undefined,
-        reportObjective,
       });
       toast.success('Configuração WhatsApp salva!');
-      onSaved();
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Erro ao salvar configuração.');
     } finally {
@@ -1522,21 +1517,21 @@ function ClientWhatsAppRow({ client, onSaved }: {
         className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 text-sm font-bold shrink-0">
-            {client.name.charAt(0).toUpperCase()}
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold shrink-0">
+            {(account.businessName || account.adAccountId).charAt(0).toUpperCase()}
           </div>
           <div className="text-left">
-            <p className="text-sm font-medium text-gray-800">{client.name}</p>
-            <p className="text-xs text-gray-400">{client.email}</p>
+            <p className="text-sm font-medium text-gray-800">{account.businessName || account.adAccountId}</p>
+            <p className="text-xs text-gray-400">{account.adAccountId}{account.clientName ? ` · ${account.clientName}` : ''}</p>
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {config && (
+          {loaded && (
             <span className={clsx(
               'text-xs px-2 py-0.5 rounded-full font-medium',
-              config.whatsapp_enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+              enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
             )}>
-              {config.whatsapp_enabled ? 'Ativo' : 'Inativo'}
+              {enabled ? 'Ativo' : 'Inativo'}
             </span>
           )}
           {loading && <span className="text-xs text-gray-400">Carregando...</span>}
@@ -1548,44 +1543,32 @@ function ClientWhatsAppRow({ client, onSaved }: {
 
       {expanded && (
         <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50 space-y-3">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-gray-600">Ativar notificações WhatsApp</span>
             <button
-              onClick={() => setWhatsappEnabled((v) => !v)}
+              onClick={() => setEnabled((v) => !v)}
               className={clsx(
                 'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
-                whatsappEnabled ? 'bg-green-500' : 'bg-gray-300'
+                enabled ? 'bg-green-500' : 'bg-gray-300'
               )}
             >
               <span className={clsx(
                 'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                whatsappEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                enabled ? 'translate-x-4' : 'translate-x-0.5'
               )} />
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1">Número WhatsApp (ou Group ID)</label>
               <input
                 type="text"
                 value={whatsappNumber}
                 onChange={(e) => setWhatsappNumber(e.target.value)}
-                placeholder="5511999999999@s.whatsapp.net"
+                placeholder="5511999999999"
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Objetivo do Relatório</label>
-              <select
-                value={reportObjective}
-                onChange={(e) => setReportObjective(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                {OBJECTIVES.map((o) => (
-                  <option key={o.key} value={o.key}>{o.label}</option>
-                ))}
-              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Evolution API URL</label>
@@ -1639,11 +1622,11 @@ function NotificationsTab() {
   );
   const templates: MessageTemplate[] = templatesData || [];
 
-  const { data: clientsData, isLoading: clientsLoading } = useSWR(
-    'admin-clients-whatsapp',
-    () => adminApi.listClients().then((r) => r.data.clients)
+  const { data: accountsData, isLoading: accountsLoading } = useSWR(
+    'meta-accounts-whatsapp',
+    () => metaApi.list().then((r) => r.data.accounts)
   );
-  const clients = clientsData || [];
+  const accounts = accountsData || [];
 
   // Map templates from snake_case API response to camelCase
   const mappedTemplates: MessageTemplate[] = templates.map((t: any) => ({
@@ -1701,34 +1684,32 @@ function NotificationsTab() {
         )}
       </Card>
 
-      {/* Section 2: Per-client WhatsApp config */}
+      {/* Section 2: Per-account WhatsApp config (admin only) */}
       <Card
-        title="Configuração WhatsApp por Cliente"
-        subtitle="Configure o número e instância Evolution API para envio de relatórios a cada cliente"
+        title="WhatsApp por Conta de Anúncios"
+        subtitle="Configure o número e Evolution API para cada conta. O relatório enviado inclui automaticamente todos os tipos de campanha (leads, vendas, engajamento, etc.)."
       >
-        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2.5 text-sm text-green-800">
-          <svg className="w-4 h-4 mt-0.5 shrink-0 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2.5 text-sm text-blue-800">
+          <svg className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>
-            Clique em um cliente para expandir e editar suas configurações de notificação WhatsApp.
-            O template usado é o que corresponde ao <strong>Objetivo do Relatório</strong> selecionado.
+            Clique em uma conta para expandir e configurar. O relatório enviado ao WhatsApp agrupará automaticamente todas as campanhas por tipo (Leads, Vendas, Engajamento…) em uma única mensagem.
           </span>
         </div>
 
-        {clientsLoading ? (
+        {accountsLoading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}
           </div>
-        ) : clients.length === 0 ? (
-          <p className="text-sm text-gray-500 py-4 text-center">Nenhum cliente cadastrado.</p>
+        ) : accounts.length === 0 ? (
+          <p className="text-sm text-gray-500 py-4 text-center">Nenhuma conta de anúncios cadastrada.</p>
         ) : (
           <div className="space-y-2">
-            {clients.map((client: any) => (
-              <ClientWhatsAppRow
-                key={client.id}
-                client={client}
-                onSaved={() => {}}
+            {accounts.map((account: any) => (
+              <AccountWhatsAppRow
+                key={account.id}
+                account={account}
               />
             ))}
           </div>

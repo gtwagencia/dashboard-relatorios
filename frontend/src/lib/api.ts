@@ -178,6 +178,12 @@ export const metaApi = {
 
   delete: (id: string) => api.delete(`/meta-accounts/${id}`),
 
+  getWhatsApp: (id: string) =>
+    api.get<{ config: { whatsapp_enabled: boolean; whatsapp_number: string | null; whatsapp_api_url: string | null; whatsapp_api_key: string | null; whatsapp_instance: string | null } }>(`/meta-accounts/${id}/whatsapp`),
+
+  updateWhatsApp: (id: string, data: { whatsappEnabled: boolean; whatsappNumber?: string; whatsappApiUrl?: string; whatsappApiKey?: string; whatsappInstance?: string }) =>
+    api.put(`/meta-accounts/${id}/whatsapp`, data),
+
   // Share management (admin only)
   listShares: (id: string) =>
     api.get<{ shares: Array<{ id: string; name: string; email: string }> }>(`/meta-accounts/${id}/shares`),
