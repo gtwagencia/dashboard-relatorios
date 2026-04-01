@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
-import { metaApi, adminApi, webhooksApi, authApi, settingsApi, notificationsApi } from '@/lib/api';
+import { metaApi, adminApi, webhooksApi, authApi, settingsApi, notificationsApi, reportsApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/formatters';
 import { getUser, setToken } from '@/lib/auth';
 import TopBar from '@/components/layout/TopBar';
@@ -385,7 +385,15 @@ function WebhooksTab() {
 
   const { data: webhooks, isLoading, mutate } = useSWR<WebhookConfig[]>(
     'webhooks',
-    () => webhooksApi.list().then((r) => r.data.webhooks)
+    () => webhooksApi.list().then((r) =>
+      r.data.webhooks.map((w: any) => ({
+        id: w.id,
+        eventType: w.event_type ?? w.eventType,
+        url: w.url,
+        isActive: w.is_active ?? w.isActive ?? false,
+        createdAt: w.created_at ?? w.createdAt,
+      }))
+    )
   );
 
   async function handleAdd() {
@@ -626,82 +634,139 @@ function WebhooksTab() {
 // ============================================================
 
 function AutoReportsTab() {
+  const today = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+  const [reportType, setReportType] = useState('weekly');
+  const [metaAccountId, setMetaAccountId] = useState('');
+  const [periodStart, setPeriodStart] = useState(sevenDaysAgo);
+  const [periodEnd, setPeriodEnd] = useState(today);
+  const [triggering, setTriggering] = useState(false);
+
+  const { data: accountsData } = useSWR(
+    'meta-accounts-reports',
+    () => metaApi.list().then((r) => r.data.accounts)
+  );
+  const accounts = accountsData || [];
+
+  // Auto-select first account when loaded
+  useState(() => {
+    if (accounts.length > 0 && !metaAccountId) setMetaAccountId(accounts[0].id);
+  });
+
+  async function handleTrigger() {
+    if (!metaAccountId) { toast.error('Selecione uma conta de anúncios.'); return; }
+    if (!periodStart || !periodEnd) { toast.error('Informe o período.'); return; }
+    setTriggering(true);
+    try {
+      await reportsApi.trigger({ type: reportType, metaAccountId, periodStart, periodEnd });
+      toast.success('Relatório disparado! Verifique o WhatsApp/webhook em alguns segundos.');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erro ao disparar relatório.');
+    } finally {
+      setTriggering(false);
+    }
+  }
+
   const schedules = [
-    {
-      icon: '📅',
-      title: 'Relatório Diário',
-      schedule: 'Todos os dias às 07:00',
-      description:
-        'Resumo com investimento total, leads gerados, CTR médio e CPC médio do dia anterior.',
-      badge: 'Ativo',
-    },
-    {
-      icon: '📊',
-      title: 'Relatório Semanal',
-      schedule: 'Toda segunda-feira às 08:00',
-      description:
-        'Análise da semana com comparativo versus semana anterior, breakdown por objetivo e melhores campanhas.',
-      badge: 'Ativo',
-    },
-    {
-      icon: '📈',
-      title: 'Relatório Mensal',
-      schedule: 'Todo dia 1º do mês às 09:00',
-      description:
-        'Relatório completo mensal com evolução histórica, análise de tendências e insights de IA.',
-      badge: 'Ativo',
-    },
+    { icon: '📅', title: 'Relatório Diário', schedule: 'Todos os dias às 07:00', description: 'Resumo do dia anterior com investimento, leads, CTR e CPC.' },
+    { icon: '📊', title: 'Relatório Semanal', schedule: 'Toda segunda-feira às 08:00', description: 'Análise semanal com breakdown por tipo de campanha (leads, vendas, engajamento…).' },
+    { icon: '📈', title: 'Relatório Mensal', schedule: 'Todo dia 1º do mês às 09:00', description: 'Relatório completo mensal com todas as campanhas agrupadas por objetivo.' },
   ];
 
   return (
     <div className="space-y-5">
-      <Card
-        title="Relatórios Automáticos"
-        subtitle="Os relatórios são enviados automaticamente via webhook n8n conforme a agenda abaixo"
-      >
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2.5 text-sm text-blue-700">
-          <svg className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>
-            Para receber os relatórios, configure ao menos um webhook ativo na aba <strong>Webhooks (n8n)</strong>.
-            Os relatórios são enviados como payload JSON para o endpoint configurado.
-          </span>
-        </div>
 
+      {/* Manual trigger */}
+      <Card
+        title="Disparar Relatório Manualmente"
+        subtitle="Gera e envia o relatório agora para a conta selecionada via WhatsApp e webhook"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Conta de Anúncios</label>
+            <select
+              value={metaAccountId}
+              onChange={(e) => setMetaAccountId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">Selecione...</option>
+              {accounts.map((a: any) => (
+                <option key={a.id} value={a.id}>{a.businessName || a.adAccountId}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de Relatório</label>
+            <select
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="daily">Diário</option>
+              <option value="weekly">Semanal</option>
+              <option value="monthly">Mensal</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Início do Período</label>
+            <input
+              type="date"
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Fim do Período</label>
+            <input
+              type="date"
+              value={periodEnd}
+              onChange={(e) => setPeriodEnd(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+        </div>
+        <Button
+          variant="primary"
+          loading={triggering}
+          onClick={handleTrigger}
+          icon={
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          }
+        >
+          Disparar Relatório
+        </Button>
+        <p className="text-xs text-gray-400 mt-2">
+          O relatório incluirá automaticamente todas as campanhas da conta (leads, vendas, engajamento, etc.) agrupadas por tipo numa única mensagem.
+        </p>
+      </Card>
+
+      {/* Schedule info */}
+      <Card
+        title="Agenda Automática"
+        subtitle="Relatórios enviados automaticamente via webhook para cada conta com WhatsApp ativo"
+      >
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">
+          Configure o WhatsApp de cada conta em <strong>Configurações → WhatsApp</strong> para ativar os envios automáticos.
+        </div>
         <div className="space-y-4">
           {schedules.map((item, i) => (
-            <div key={i} className="flex items-start gap-4 p-5 border border-gray-100 rounded-xl hover:border-blue-100 transition-colors">
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-xl shrink-0">
-                {item.icon}
-              </div>
-              <div className="flex-1">
+            <div key={i} className="flex items-start gap-4 p-4 border border-gray-100 rounded-xl">
+              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-xl shrink-0">{item.icon}</div>
+              <div>
                 <div className="flex items-center gap-3 mb-1">
                   <h4 className="text-sm font-semibold text-gray-800">{item.title}</h4>
-                  <Badge variant="success">{item.badge}</Badge>
+                  <Badge variant="success">Ativo</Badge>
                 </div>
-                <p className="text-xs text-blue-600 font-medium mb-1.5">
-                  ⏰ {item.schedule}
-                </p>
+                <p className="text-xs text-blue-600 font-medium mb-1">⏰ {item.schedule}</p>
                 <p className="text-sm text-gray-500">{item.description}</p>
               </div>
             </div>
           ))}
-        </div>
-
-        <div className="mt-5 p-4 bg-gray-50 rounded-xl">
-          <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-            Formato do Payload JSON
-          </h4>
-          <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-3 overflow-x-auto">
-{`{
-  "type": "daily" | "weekly" | "monthly",
-  "period": { "start": "2024-01-01", "end": "2024-01-07" },
-  "summary": { "totalSpend": 1234.56, "totalLeads": 89, ... },
-  "objectives": [ { "name": "Leads", "spend": 800, ... } ],
-  "generatedAt": "2024-01-08T07:00:00Z"
-}`}
-          </pre>
         </div>
       </Card>
     </div>

@@ -125,9 +125,9 @@ export const reportsApi = {
 
   trigger: (data: {
     type: string;
-    objective?: string;
-    periodStart?: string;
-    periodEnd?: string;
+    metaAccountId: string;
+    periodStart: string;
+    periodEnd: string;
   }) => api.post<Report>('/reports/trigger', data),
 };
 
