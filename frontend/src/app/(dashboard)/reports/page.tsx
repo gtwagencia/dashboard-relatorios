@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { format, subDays } from 'date-fns';
-import { reportsApi } from '@/lib/api';
+import { reportsApi, metaApi } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/formatters';
 import TopBar from '@/components/layout/TopBar';
 import Card from '@/components/ui/Card';
@@ -71,18 +71,22 @@ interface GenerateModalProps {
 }
 
 function GenerateModal({ onClose, onSuccess }: GenerateModalProps) {
-  const [type, setType] = useState('daily');
-  const [objective, setObjective] = useState('all');
-  const [periodStart, setPeriodStart] = useState(
-    format(subDays(new Date(), 7), 'yyyy-MM-dd')
-  );
+  const [type, setType] = useState('weekly');
+  const [metaAccountId, setMetaAccountId] = useState('');
+  const [periodStart, setPeriodStart] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [periodEnd, setPeriodEnd] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(false);
 
+  const { data: accountsData } = useSWR('meta-accounts-report-modal', () =>
+    metaApi.list().then((r) => r.data.accounts)
+  );
+  const accounts = accountsData || [];
+
   async function handleSubmit() {
+    if (!metaAccountId) { toast.error('Selecione uma conta de anúncios.'); return; }
     setLoading(true);
     try {
-      await reportsApi.trigger({ type, objective, periodStart, periodEnd });
+      await reportsApi.trigger({ type, metaAccountId, periodStart, periodEnd });
       toast.success('Relatório gerado com sucesso!');
       onSuccess();
       onClose();
@@ -110,44 +114,35 @@ function GenerateModal({ onClose, onSuccess }: GenerateModalProps) {
 
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Tipo de Relatório
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Conta de Anúncios</label>
+            <select
+              value={metaAccountId}
+              onChange={(e) => setMetaAccountId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Selecione uma conta...</option>
+              {accounts.map((a: any) => (
+                <option key={a.id} value={a.id}>{a.businessName || a.adAccountId}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo de Relatório</label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {REPORT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Objetivo
-            </label>
-            <select
-              value={objective}
-              onChange={(e) => setObjective(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {OBJECTIVES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Data Início
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Data Início</label>
               <input
                 type="date"
                 value={periodStart}
@@ -156,9 +151,7 @@ function GenerateModal({ onClose, onSuccess }: GenerateModalProps) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Data Fim
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Data Fim</label>
               <input
                 type="date"
                 value={periodEnd}
