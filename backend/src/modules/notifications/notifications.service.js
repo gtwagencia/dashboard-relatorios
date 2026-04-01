@@ -135,7 +135,7 @@ function renderMessage(template, { clientName, accountName, reportType, periodSt
       const adLines = c.ads.map((a, ai) =>
         substituteVars(template.ad_block, buildAdVars(a, ai))
       );
-      return campaignHeader + '\n' + adLines.join('\n');
+      return campaignHeader + '\n' + adLines.join('\n\n');
     }
 
     return campaignHeader;
@@ -251,7 +251,7 @@ async function renderFullMessage({ clientName, accountName, reportType, periodSt
             cpc:             fmtCurrency(a.cpc),
           })
         );
-        return line + '\n' + adLines.join('\n');
+        return line + '\n' + adLines.join('\n\n');
       }
       return line;
     });
