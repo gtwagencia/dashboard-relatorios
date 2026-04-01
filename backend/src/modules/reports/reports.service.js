@@ -4,6 +4,7 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../../config/database');
 const { formatReport, getEventName } = require('./reports.formatter');
+const { getAccountBalance } = require('../meta/meta.service');
 const logger = require('../../utils/logger');
 
 /**
@@ -132,7 +133,7 @@ async function sendWebhookPayload(url, payload, secret) {
 async function generateReport(metaAccountId, type, periodStart, periodEnd) {
   // Load account + client info
   const { rows: accountRows } = await query(
-    `SELECT ma.id, ma.client_id, ma.business_name,
+    `SELECT ma.id, ma.client_id, ma.ad_account_id, ma.business_name,
             ma.whatsapp_enabled, ma.whatsapp_number,
             ma.whatsapp_api_url, ma.whatsapp_api_key, ma.whatsapp_instance,
             c.name AS client_name
@@ -172,6 +173,16 @@ async function generateReport(metaAccountId, type, periodStart, periodEnd) {
   if (account.whatsapp_enabled && account.whatsapp_number) {
     try {
       const notifSvc = require('../notifications/notifications.service');
+
+      // Fetch account balance (best-effort — don't fail if unavailable)
+      let balance = null;
+      try {
+        const balanceData = await getAccountBalance(account.ad_account_id);
+        balance = balanceData?.balance ?? null;
+      } catch (e) {
+        logger.warn('Could not fetch balance for report', { metaAccountId, error: e.message });
+      }
+
       const message = await notifSvc.renderFullMessage({
         clientName,
         accountName: account.business_name,
@@ -180,7 +191,7 @@ async function generateReport(metaAccountId, type, periodStart, periodEnd) {
         periodEnd,
         campaigns: payload.campaigns,
         summary: payload.summary,
-        balance: null,
+        balance,
       });
 
       whatsappPayload = {
