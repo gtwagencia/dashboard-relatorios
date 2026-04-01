@@ -157,6 +157,8 @@ export default function DashboardPage() {
   const saleCount = salesRows.reduce((s, o) => s + o.conversions, 0);
 
   const costPerLeadCalc = leadCount > 0 ? leadSpend / leadCount : null;
+  // Override with backend-computed value when available (more accurate)
+  const costPerLeadFinal = leadRows.reduce((best, o) => o.costPerLead > 0 ? o.costPerLead : best, costPerLeadCalc ?? 0) || costPerLeadCalc;
   const costPerSaleCalc = saleCount > 0 ? saleSpend / saleCount : null;
 
   const pieData = (byObjective ?? []).map((o) => ({
@@ -317,7 +319,7 @@ export default function DashboardPage() {
           />
           <KpiCard
             label="Custo por Lead"
-            value={costPerLeadCalc !== null ? formatCurrency(costPerLeadCalc, currency) : '-'}
+            value={costPerLeadFinal ? formatCurrency(costPerLeadFinal, currency) : '-'}
             loading={loadingObjective}
             accentColor="purple"
             icon={

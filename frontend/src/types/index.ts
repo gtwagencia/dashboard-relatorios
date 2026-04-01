@@ -76,6 +76,7 @@ export interface ObjectiveMetrics {
   leads: number;
   conversions: number;
   ctr: number;
+  costPerLead: number;
 }
 
 export interface TimeseriesPoint {

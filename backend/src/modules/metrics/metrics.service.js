@@ -151,6 +151,7 @@ async function getByObjective(clientId, dateFrom, dateTo, metaAccountId, campaig
     leads: Number(r.total_leads),
     conversions: Number(r.total_conversions),
     ctr: Number(r.avg_ctr),
+    costPerLead: Number(r.avg_cost_per_lead),
   }));
 }
 
