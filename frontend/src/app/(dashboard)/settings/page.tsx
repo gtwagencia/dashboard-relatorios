@@ -428,10 +428,16 @@ function WebhooksTab() {
   async function handleTest(id: string) {
     setTestingId(id);
     try {
-      await webhooksApi.test(id);
-      toast.success('Webhook testado! Verifique o endpoint n8n.');
-    } catch {
-      toast.error('Falha no teste do webhook.');
+      const res = await webhooksApi.test(id);
+      if (res.data?.success) {
+        toast.success(`Webhook testado com sucesso! Status: ${res.data.statusCode}`);
+      } else {
+        const detail = res.data?.error || `Status ${res.data?.statusCode || 'desconhecido'}`;
+        toast.error(`Falha no teste: ${detail}`);
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.error || err?.message || 'Erro desconhecido';
+      toast.error(`Falha no teste: ${detail}`);
     } finally {
       setTestingId(null);
     }
@@ -604,7 +610,6 @@ function WebhooksTab() {
                     size="sm"
                     loading={testingId === webhook.id}
                     onClick={() => handleTest(webhook.id)}
-                    disabled={!webhook.isActive}
                   >
                     Testar
                   </Button>
