@@ -362,9 +362,11 @@ function MetaAccountsTab() {
 // ============================================================
 
 const EVENT_TYPES = [
-  { value: 'daily', label: 'Relatório Diário' },
-  { value: 'weekly', label: 'Relatório Semanal' },
-  { value: 'monthly', label: 'Relatório Mensal' },
+  { value: '*', label: 'Todos os eventos' },
+  { value: 'whatsapp.report', label: 'Relatório WhatsApp (recomendado)' },
+  { value: 'report.daily', label: 'Relatório Diário (JSON)' },
+  { value: 'report.weekly', label: 'Relatório Semanal (JSON)' },
+  { value: 'report.monthly', label: 'Relatório Mensal (JSON)' },
   { value: 'sync_complete', label: 'Sincronização Concluída' },
   { value: 'campaign_alert', label: 'Alerta de Campanha' },
 ];
@@ -375,7 +377,7 @@ function getEventTypeLabel(eventType: string): string {
 
 function WebhooksTab() {
   const [url, setUrl] = useState('');
-  const [eventType, setEventType] = useState('daily');
+  const [eventType, setEventType] = useState('whatsapp.report');
   const [secret, setSecret] = useState('');
   const [adding, setAdding] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -655,9 +657,9 @@ function AutoReportsTab() {
   const accounts = accountsData || [];
 
   // Auto-select first account when loaded
-  useState(() => {
+  useEffect(() => {
     if (accounts.length > 0 && !metaAccountId) setMetaAccountId(accounts[0].id);
-  });
+  }, [accounts]);
 
   async function handleTrigger() {
     if (!metaAccountId) { toast.error('Selecione uma conta de anúncios.'); return; }
