@@ -122,10 +122,15 @@ export default function CampaignsPage() {
   };
 
   async function handleExport() {
+    if (!selectedAccountId) {
+      toast.error('Selecione uma conta de anúncios antes de gerar o relatório.');
+      return;
+    }
     setExporting(true);
     try {
       await reportsApi.trigger({
         type: 'custom',
+        metaAccountId: selectedAccountId,
         periodStart: dateFrom,
         periodEnd: dateTo,
       });
