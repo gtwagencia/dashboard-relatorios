@@ -174,6 +174,7 @@ async function generateReport(metaAccountId, type, periodStart, periodEnd) {
       const notifSvc = require('../notifications/notifications.service');
       const message = await notifSvc.renderFullMessage({
         clientName,
+        accountName: account.business_name,
         reportType: type,
         periodStart,
         periodEnd,

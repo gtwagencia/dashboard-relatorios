@@ -68,11 +68,12 @@ function formatPeriod(type, periodStart, periodEnd) {
 /**
  * Render a full WhatsApp message from a template + report data.
  */
-function renderMessage(template, { clientName, reportType, periodStart, periodEnd, campaigns, summary, balance }) {
+function renderMessage(template, { clientName, accountName, reportType, periodStart, periodEnd, campaigns, summary, balance }) {
   const periodo = formatPeriod(reportType, periodStart, periodEnd);
 
   const globalVars = {
-    nome_cliente:       clientName,
+    nome_cliente:        clientName,
+    nome_conta_anuncio:  accountName || clientName,
     periodo,
     total_investido:    fmtCurrency(summary.total_spend),
     total_leads:        fmtNumber(summary.total_leads),
@@ -157,11 +158,12 @@ function renderMessage(template, { clientName, reportType, periodStart, periodEn
  * @param {{ clientName, reportType, periodStart, periodEnd, campaigns, summary, balance }} data
  * @returns {Promise<string>}
  */
-async function renderFullMessage({ clientName, reportType, periodStart, periodEnd, campaigns, summary, balance }) {
+async function renderFullMessage({ clientName, accountName, reportType, periodStart, periodEnd, campaigns, summary, balance }) {
   const periodo = formatPeriod(reportType, periodStart, periodEnd);
 
   const globalVars = {
-    nome_cliente:       clientName,
+    nome_cliente:        clientName,
+    nome_conta_anuncio:  accountName || clientName,
     periodo,
     total_investido:    fmtCurrency(summary.total_spend),
     total_leads:        fmtNumber(summary.total_leads),
