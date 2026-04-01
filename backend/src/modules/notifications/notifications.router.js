@@ -16,8 +16,8 @@ router.get('/templates', async (req, res, next) => {
 
 router.put('/templates/:objective', async (req, res, next) => {
   try {
-    const { name, headerBlock, campaignBlock, summaryBlock, isActive } = req.body;
-    const template = await svc.upsertTemplate(req.params.objective, { name, headerBlock, campaignBlock, summaryBlock, isActive });
+    const { name, headerBlock, campaignBlock, adBlock, summaryBlock, isActive } = req.body;
+    const template = await svc.upsertTemplate(req.params.objective, { name, headerBlock, campaignBlock, adBlock, summaryBlock, isActive });
     return res.status(200).json({ template });
   } catch (err) { next(err); }
 });
