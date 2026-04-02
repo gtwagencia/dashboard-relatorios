@@ -17,18 +17,6 @@ function isoDate(offsetDays = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-/**
- * Get the start of the ISO week (Monday) for a given date string.
- * @param {string} dateStr - YYYY-MM-DD
- * @returns {string}
- */
-function startOfWeek(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  const day = d.getUTCDay(); // 0=Sun, 1=Mon, ...
-  const diff = (day === 0 ? -6 : 1 - day); // shift to Monday
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * Get the first day of the previous calendar month.
@@ -49,18 +37,23 @@ function previousMonth() {
 }
 
 /**
- * Load all active client IDs.
- * @returns {Promise<string[]>}
+ * Load all meta accounts that have WhatsApp notifications enabled.
+ * @returns {Promise<Array<{ id: string, businessName: string }>>}
  */
-async function getActiveClientIds() {
+async function getActiveMetaAccounts() {
   const { rows } = await query(
-    `SELECT id FROM clients WHERE is_active = true AND role = 'client'`
+    `SELECT ma.id, ma.business_name
+     FROM meta_accounts ma
+     JOIN clients c ON c.id = ma.client_id
+     WHERE ma.whatsapp_enabled = true
+       AND ma.whatsapp_number IS NOT NULL
+       AND c.is_active = true`
   );
-  return rows.map((r) => r.id);
+  return rows;
 }
 
 /**
- * Generate a report for every active client.
+ * Generate a report for every meta account with WhatsApp enabled.
  * @param {string} type         - 'daily' | 'weekly' | 'monthly'
  * @param {string} periodStart  - YYYY-MM-DD
  * @param {string} periodEnd    - YYYY-MM-DD
@@ -69,19 +62,19 @@ async function runReportsForAllClients(type, periodStart, periodEnd) {
   const start = Date.now();
   logger.info(`[Scheduler] Starting ${type} reports`, { periodStart, periodEnd });
 
-  let clientIds;
+  let accounts;
   try {
-    clientIds = await getActiveClientIds();
+    accounts = await getActiveMetaAccounts();
   } catch (err) {
-    logger.error(`[Scheduler] Failed to load clients for ${type} reports`, { error: err.message });
+    logger.error(`[Scheduler] Failed to load meta accounts for ${type} reports`, { error: err.message });
     return;
   }
 
-  logger.info(`[Scheduler] Generating ${type} reports for ${clientIds.length} clients`);
+  logger.info(`[Scheduler] Generating ${type} reports for ${accounts.length} meta accounts`);
 
   const results = await Promise.allSettled(
-    clientIds.map((clientId) =>
-      generateReport(clientId, type, 'all', periodStart, periodEnd)
+    accounts.map((account) =>
+      generateReport(account.id, type, periodStart, periodEnd)
     )
   );
 
@@ -93,8 +86,9 @@ async function runReportsForAllClients(type, periodStart, periodEnd) {
       succeeded++;
     } else {
       failed++;
-      logger.error(`[Scheduler] Report failed for client`, {
-        clientId: clientIds[i],
+      logger.error(`[Scheduler] Report failed for meta account`, {
+        metaAccountId: accounts[i].id,
+        businessName: accounts[i].businessName,
         error: result.reason?.message,
       });
     }
@@ -131,11 +125,10 @@ function initScheduler() {
 
   // ── Weekly reports: Monday 08:00 BRT = 11:00 UTC ─────────────────────────
   cron.schedule('0 11 * * 1', async () => {
-    // Report for the previous Mon-Sun week
-    const today = isoDate(0);
-    const lastSunday = isoDate(-1); // yesterday was Sunday
-    const lastMonday = startOfWeek(lastSunday);
-    await runReportsForAllClients('weekly', lastMonday, lastSunday);
+    // Report for previous Sun-Sat week (today=Monday: Sat=-2, Sun=-8)
+    const lastSaturday = isoDate(-2);
+    const lastSunday   = isoDate(-8);
+    await runReportsForAllClients('weekly', lastSunday, lastSaturday);
   }, { timezone: 'UTC' });
 
   // ── Monthly reports: 1st of month 09:00 BRT = 12:00 UTC ──────────────────
@@ -154,4 +147,4 @@ function initScheduler() {
   });
 }
 
-module.exports = { initScheduler };
+module.exports = { initScheduler, runReportsForAllClients };

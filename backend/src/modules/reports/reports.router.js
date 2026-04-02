@@ -2,7 +2,8 @@
 
 const { Router } = require('express');
 const reportsService = require('./reports.service');
-const { authenticate } = require('../../middleware/auth');
+const { authenticate, requireAdmin } = require('../../middleware/auth');
+const { runReportsForAllClients } = require('../../jobs/scheduler');
 
 const router = Router();
 
@@ -68,6 +69,53 @@ router.post('/trigger', async (req, res, next) => {
       message: 'Report generated',
       reportId: result.id,
       status: result.status,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/reports/trigger-all
+ * Manually dispatch reports for ALL active meta accounts (admin only).
+ * Body: { type } - 'daily' | 'weekly' | 'monthly'
+ */
+router.post('/trigger-all', requireAdmin, async (req, res, next) => {
+  try {
+    const { type } = req.body;
+    if (!['daily', 'weekly', 'monthly'].includes(type)) {
+      return res.status(400).json({ error: 'type deve ser: daily, weekly ou monthly', code: 400 });
+    }
+
+    const now = new Date();
+    const isoDate = (offset) => {
+      const d = new Date(now);
+      d.setUTCDate(d.getUTCDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+
+    let periodStart, periodEnd;
+    if (type === 'daily') {
+      periodStart = periodEnd = isoDate(-1);
+    } else if (type === 'weekly') {
+      periodEnd   = isoDate(-2); // last Saturday
+      periodStart = isoDate(-8); // last Sunday
+    } else {
+      // monthly: previous calendar month
+      const year  = now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+      const month = now.getUTCMonth() === 0 ? 12 : now.getUTCMonth();
+      periodStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      periodEnd   = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
+
+    // Run async — respond immediately so the request doesn't time out
+    runReportsForAllClients(type, periodStart, periodEnd).catch(() => {});
+
+    return res.status(202).json({
+      message: `Disparando relatórios ${type} para todas as contas`,
+      periodStart,
+      periodEnd,
     });
   } catch (err) {
     next(err);

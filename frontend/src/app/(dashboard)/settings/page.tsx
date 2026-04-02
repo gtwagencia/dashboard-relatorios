@@ -701,6 +701,22 @@ function AutoReportsTab() {
   const [periodStart, setPeriodStart] = useState(sevenDaysAgo);
   const [periodEnd, setPeriodEnd] = useState(today);
   const [triggering, setTriggering] = useState(false);
+  const [triggeringAll, setTriggeringAll] = useState<string | null>(null);
+
+  const user = getUser();
+  const isAdmin = user?.role === 'admin';
+
+  async function handleTriggerAll(type: 'daily' | 'weekly' | 'monthly') {
+    setTriggeringAll(type);
+    try {
+      const res = await reportsApi.triggerAll(type);
+      toast.success(`Relatórios ${type === 'daily' ? 'diários' : type === 'weekly' ? 'semanais' : 'mensais'} disparados! (${res.data.periodStart} → ${res.data.periodEnd})`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erro ao disparar relatórios.');
+    } finally {
+      setTriggeringAll(null);
+    }
+  }
 
   const { data: accountsData } = useSWR(
     'meta-accounts-reports',
@@ -727,10 +743,10 @@ function AutoReportsTab() {
     }
   }
 
-  const schedules = [
-    { icon: '📅', title: 'Relatório Diário', schedule: 'Todos os dias às 07:00', description: 'Resumo do dia anterior com investimento, leads, CTR e CPC.' },
-    { icon: '📊', title: 'Relatório Semanal', schedule: 'Toda segunda-feira às 08:00', description: 'Análise semanal com breakdown por tipo de campanha (leads, vendas, engajamento…).' },
-    { icon: '📈', title: 'Relatório Mensal', schedule: 'Todo dia 1º do mês às 09:00', description: 'Relatório completo mensal com todas as campanhas agrupadas por objetivo.' },
+  const schedules: Array<{ icon: string; title: string; schedule: string; description: string; type: 'daily' | 'weekly' | 'monthly' }> = [
+    { icon: '📅', title: 'Relatório Diário', schedule: 'Todos os dias às 07:00', description: 'Resumo do dia anterior com investimento, leads, CTR e CPC.', type: 'daily' },
+    { icon: '📊', title: 'Relatório Semanal', schedule: 'Toda segunda-feira às 08:00', description: 'Análise semanal com breakdown por tipo de campanha (leads, vendas, engajamento…).', type: 'weekly' },
+    { icon: '📈', title: 'Relatório Mensal', schedule: 'Todo dia 1º do mês às 09:00', description: 'Relatório completo mensal com todas as campanhas agrupadas por objetivo.', type: 'monthly' },
   ];
 
   return (
@@ -816,7 +832,7 @@ function AutoReportsTab() {
           {schedules.map((item, i) => (
             <div key={i} className="flex items-start gap-4 p-4 border border-gray-100 rounded-xl">
               <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-xl shrink-0">{item.icon}</div>
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <h4 className="text-sm font-semibold text-gray-800">{item.title}</h4>
                   <Badge variant="success">Ativo</Badge>
@@ -824,6 +840,21 @@ function AutoReportsTab() {
                 <p className="text-xs text-blue-600 font-medium mb-1">⏰ {item.schedule}</p>
                 <p className="text-sm text-gray-500">{item.description}</p>
               </div>
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={triggeringAll === item.type}
+                  onClick={() => handleTriggerAll(item.type)}
+                  icon={
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  }
+                >
+                  Disparar Agora
+                </Button>
+              )}
             </div>
           ))}
         </div>

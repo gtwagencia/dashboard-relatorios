@@ -129,6 +129,9 @@ export const reportsApi = {
     periodStart: string;
     periodEnd: string;
   }) => api.post<Report>('/reports/trigger', data),
+
+  triggerAll: (type: 'daily' | 'weekly' | 'monthly') =>
+    api.post<{ message: string; periodStart: string; periodEnd: string }>('/reports/trigger-all', { type }),
 };
 
 // AI API
