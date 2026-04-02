@@ -175,10 +175,17 @@ async function generateReport(metaAccountId, type, periodStart, periodEnd) {
       const notifSvc = require('../notifications/notifications.service');
 
       // Fetch account balance (best-effort — don't fail if unavailable)
+      // Credit-line accounts: available = spendCap - amountSpent
+      // Prepaid accounts: use balance field directly
       let balance = null;
       try {
         const balanceData = await getAccountBalance(account.ad_account_id);
-        balance = balanceData?.balance ?? null;
+        if (balanceData) {
+          balance = balanceData.spendCap > 0
+            ? balanceData.spendCap - balanceData.amountSpent
+            : balanceData.balance;
+          if (balance <= 0) balance = null;
+        }
       } catch (e) {
         logger.warn('Could not fetch balance for report', { metaAccountId, error: e.message });
       }
